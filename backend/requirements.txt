@@ -17,3 +17,4 @@ pydantic-settings
 anthropic
 httpx
 pytest
+apscheduler

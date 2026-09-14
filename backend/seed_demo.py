@@ -10,8 +10,7 @@ from app.core.security import hash_password
 from app.models.user import User
 from app.models.connected_account import ConnectedAccount
 from app.models.synced_data import SyncedData
-from app.api.v1.connectors import generate_mock_business_data
-
+from app.services.sync_service import generate_mock_business_data
 def seed():
     db = SessionLocal()
     try:

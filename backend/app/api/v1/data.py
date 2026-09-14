@@ -35,43 +35,8 @@ def trigger_profiling(
     Saves and returns the output statistics.
     """
     owner_id = get_workspace_owner_id(current_user)
-    records = db.query(SyncedData).filter(SyncedData.user_id == owner_id).all()
-    if not records:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No synchronized data records found. Please connect your account and sync sheets first."
-        )
-
-    # Execute profiling engine
-    profile_data = run_profiling(records)
-
-    # Determine period start and end
-    # Extract dates from records
-    dates = []
-    for r in records:
-        # Standardize matching key case-insensitively
-        payload = r.raw_payload
-        for k, v in payload.items():
-            if k.lower().strip() in ("date", "timestamp", "created_at", "dt"):
-                parsed_dt = pd.to_datetime(v, errors="coerce")
-                if pd.notna(parsed_dt):
-                    dates.append(parsed_dt)
-
-    period_start = min(dates).to_pydatetime() if dates else None
-    period_end = max(dates).to_pydatetime() if dates else None
-
-    # Save to computed_stats
-    stat = ComputedStat(
-        user_id=owner_id,
-        metrics=profile_data,
-        period_start=period_start,
-        period_end=period_end
-    )
-    db.add(stat)
-    db.commit()
-    db.refresh(stat)
-
-    return stat.metrics
+    from app.services.sync_service import profile_user_data
+    return profile_user_data(db, owner_id)
 
 
 @router.get("/profile/latest")

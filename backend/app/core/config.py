@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
     
     # CORS
-    CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
+    CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001"
     
     # Database
     DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://vidushibhadauria@localhost:5432/sage_db")
@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     
     # AI (Claude API)
     ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
+    
+    # Scheduled Ingestion
+    SYNC_INTERVAL_MINUTES: int = int(os.getenv("SYNC_INTERVAL_MINUTES", "30"))
     
     class Config:
         case_sensitive = True

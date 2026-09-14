@@ -21,30 +21,8 @@ def generate_insights(
     Saves and returns the output insight record.
     """
     owner_id = get_workspace_owner_id(current_user)
-    # Fetch latest computed stats for the user
-    latest_stat = db.query(ComputedStat).filter(
-        ComputedStat.user_id == owner_id
-    ).order_by(ComputedStat.created_at.desc()).first()
-
-    if not latest_stat:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No computed stats found. Please profile your synced data first."
-        )
-
-    # Generate insights using AI service
-    insight_payload = AIService.generate_insights(latest_stat.metrics)
-
-    # Save to database
-    insight_rec = Insight(
-        user_id=owner_id,
-        insight_data=insight_payload
-    )
-    db.add(insight_rec)
-    db.commit()
-    db.refresh(insight_rec)
-
-    return insight_rec
+    from app.services.sync_service import generate_user_insights
+    return generate_user_insights(db, owner_id)
 
 
 @router.get("/latest")

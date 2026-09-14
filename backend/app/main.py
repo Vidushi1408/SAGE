@@ -2,17 +2,28 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import os
 
+from contextlib import asynccontextmanager
 from app.core.config import settings
 from app.api.v1 import auth, connectors, data, insights, chat, team
+from app.services.scheduler import scheduler_service
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: Initialize and run background synchronization
+    scheduler_service.start()
+    yield
+    # Shutdown: Stop scheduler execution threads
+    scheduler_service.shutdown()
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
     description="SAGE - Smart Analytics & Growth Engine API. An analyst that never clocks out.",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # CORS configurations
-cors_origins_raw = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000")
+cors_origins_raw = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001")
 origins = [o.strip() for o in cors_origins_raw.split(",") if o.strip()]
 
 app.add_middleware(
