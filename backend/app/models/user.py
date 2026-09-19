@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from app.core.db import Base
 
@@ -15,6 +15,13 @@ class User(Base):
     role = Column(String, default="admin", nullable=False)  # 'admin', 'analyst', 'viewer'
     workspace_owner_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
     is_active = Column(Boolean, default=True)
+    alert_email_enabled = Column(Boolean, default=True, nullable=False)
+    # Keys of anomalies already alerted on, so repeat syncs only notify about NEW ones (owner rows only)
+    last_alerted_anomalies = Column(JSONB, nullable=True)
+    invite_token = Column(String, nullable=True, unique=True)
+    invite_token_expires_at = Column(DateTime, nullable=True)
+    password_reset_token = Column(String, nullable=True, unique=True)
+    password_reset_expires_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

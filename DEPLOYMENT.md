@@ -41,12 +41,15 @@ In the **sage-backend** web service settings under **Environment**, configure th
 | Variable Name | Description | Default / Example |
 | :--- | :--- | :--- |
 | `DATABASE_URL` | Render auto-binds this connection string from the provisioned db | *Auto-configured* |
+| `ENVIRONMENT` | Set to `production` (already in `render.yaml`): hides `/docs` and refuses to boot with the default `SECRET_KEY` | `production` |
 | `SECRET_KEY` | JWT signing secret key | *Auto-generated* |
 | `ANTHROPIC_API_KEY` | Your Anthropic (Claude) API Key (leave empty to use Mock AI) | `sk-ant-api03-...` |
 | `GOOGLE_CLIENT_ID` | Google OAuth Client ID (leave empty to use Mock connection) | `123456-abc.apps.googleusercontent.com` |
 | `GOOGLE_CLIENT_SECRET`| Google OAuth Client Secret (leave empty for Mock connection) | `GOCSPX-...` |
 | `GOOGLE_REDIRECT_URI` | Production redirect callback URL (update with your Render URL) | `https://sage-backend.onrender.com/api/v1/connectors/google/callback` |
 | `SYNC_INTERVAL_MINUTES` | Frequency of background spreadsheet checks (in minutes) | `30` |
+| `RESEND_API_KEY` | Your Resend API key for transactional email (leave empty to use Mock Email mode) | `re_...` |
+| `EMAIL_FROM` | The From address used for password reset/invite/alert emails | `SAGE <insights@yourdomain.com>` |
 
 ---
 

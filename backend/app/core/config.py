@@ -3,6 +3,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "SAGE — Smart Analytics & Growth Engine"
+    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
     API_V1_STR: str = "/api/v1"
     
     # Security
@@ -26,9 +27,13 @@ class Settings(BaseSettings):
     
     # AI (Claude API)
     ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
-    
+
     # Scheduled Ingestion
     SYNC_INTERVAL_MINUTES: int = int(os.getenv("SYNC_INTERVAL_MINUTES", "30"))
+
+    # Email (Resend)
+    RESEND_API_KEY: str = os.getenv("RESEND_API_KEY", "")
+    EMAIL_FROM: str = os.getenv("EMAIL_FROM", "SAGE <insights@sage.dev>")
     
     class Config:
         case_sensitive = True

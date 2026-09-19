@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import api, { Sheet } from "../../lib/api";
-import { Database, Sparkles, RefreshCw, CheckCircle, BarChart3, AlertCircle, LogOut } from "lucide-react";
+import { Database, Upload, RefreshCw, CheckCircle, BarChart3, AlertCircle, LogOut } from "lucide-react";
 
 export default function Onboarding() {
   const router = useRouter();
@@ -84,6 +84,27 @@ export default function Onboarding() {
     } catch (err: any) {
       setSyncStep("idle");
       setError("Analysis pipeline failed: " + err.message);
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+
+    setError("");
+    setSyncStep("pulling");
+    try {
+      await api.uploadFile(file);
+      setSyncStep("profiling");
+      await api.triggerProfiling();
+      setSyncStep("generating");
+      await api.generateInsights();
+      setSyncStep("completed");
+      setTimeout(() => router.push("/dashboard"), 1000);
+    } catch (err: any) {
+      setSyncStep("idle");
+      setError("Could not process that file: " + err.message);
     }
   };
 
@@ -226,6 +247,23 @@ export default function Onboarding() {
               <span>Begin Analysis Pipeline</span>
             </button>
           )}
+
+          <div className="flex items-center gap-3 text-[10px] text-gray-600 uppercase tracking-widest">
+            <div className="flex-1 border-t border-white/5"></div><span>or</span><div className="flex-1 border-t border-white/5"></div>
+          </div>
+
+          <label className="flex items-center justify-center gap-2 w-full py-4 rounded-xl border border-dashed border-white/10 hover:border-indigo-500/40 hover:bg-white/5 cursor-pointer transition-all text-xs text-gray-400">
+            <Upload className="w-4 h-4" />
+            <span>Upload a CSV or XLSX file instead</span>
+            <input type="file" accept=".csv,.xlsx" className="hidden" disabled={syncStep !== "idle"} onChange={handleFileUpload} />
+          </label>
+
+          <button
+            onClick={() => router.push("/dashboard")}
+            className="w-full text-center text-xs text-gray-400 hover:text-white transition-all"
+          >
+            Skip for now — take me to the dashboard
+          </button>
 
           <button
             onClick={handleSignOut}

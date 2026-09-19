@@ -63,9 +63,9 @@ export default function Register() {
 
           <form onSubmit={handleRegister} className="space-y-4 mb-6">
             <div>
-              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Email Address</label>
-              <input
-                type="email"
+              <label htmlFor="field-email-address" className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Email Address</label>
+              <input id="field-email-address" 
+                type="email" autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="name@business.com"
@@ -75,9 +75,9 @@ export default function Register() {
             </div>
 
             <div>
-              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Create Password</label>
-              <input
-                type="password"
+              <label htmlFor="field-create-password" className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Create Password</label>
+              <input id="field-create-password" 
+                type="password" minLength={8} autoComplete="new-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
@@ -85,6 +85,8 @@ export default function Register() {
                 className="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 transition-all text-xs"
               />
             </div>
+
+            <p className="text-[10px] text-gray-500 -mt-2">Use at least 8 characters.</p>
 
             <div className="p-3 bg-indigo-500/5 border border-indigo-500/10 rounded-lg text-[10px] text-indigo-300 leading-normal flex items-start gap-2">
               <ShieldCheck className="w-4 h-4 shrink-0 text-indigo-400" />

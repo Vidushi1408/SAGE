@@ -3,6 +3,8 @@ import numpy as np
 from typing import List, Dict, Any, Tuple
 from datetime import datetime
 from app.models.synced_data import SyncedData
+from app.analytics.column_mapping import map_columns, column_warnings
+from app.analytics.parsing import parse_amount_series
 
 def clean_val(val: Any) -> Any:
     """Helper to convert NumPy types/NaNs to standard Python JSON-serializable types."""
@@ -26,10 +28,11 @@ def run_profiling(records: List[SyncedData]) -> Dict[str, Any]:
     if not records:
         return {
             "summary": {"total_revenue": 0, "total_transactions": 0, "avg_transaction_value": 0},
-            "period_metrics": {"monthly": [], "weekly": []},
+            "period_metrics": {"daily": [], "monthly": [], "weekly": []},
             "category_metrics": {"top_categories": [], "bottom_categories": []},
             "anomalies": [],
-            "correlations": {}
+            "correlations": {},
+            "data_quality": {"rows_total": 0, "rows_used": 0, "mapped_columns": {}, "warnings": []}
         }
 
     # Extract dict payloads
@@ -44,19 +47,10 @@ def run_profiling(records: List[SyncedData]) -> Dict[str, Any]:
     df = pd.DataFrame(raw_payloads)
 
     # 1. Standardize columns case-insensitively
-    column_mapping = {}
-    for col in df.columns:
-        col_lower = col.lower().strip()
-        if col_lower in ("date", "timestamp", "created_at", "dt"):
-            column_mapping[col] = "Date"
-        elif col_lower in ("amount", "sales", "value", "price", "revenue"):
-            column_mapping[col] = "Amount"
-        elif col_lower in ("category", "type", "dept", "department"):
-            column_mapping[col] = "Category"
-        elif col_lower in ("quantity", "qty", "count", "units"):
-            column_mapping[col] = "Quantity"
-            
-    df = df.rename(columns=column_mapping)
+    original_columns = [c for c in df.columns if not str(c).startswith("_")]
+    df, mapped_columns = map_columns(df)
+    warnings = column_warnings(original_columns, mapped_columns)
+    rows_total = int(df.shape[0])
 
     # Ensure critical fields exist, or create empty defaults
     if "Date" not in df.columns:
@@ -67,21 +61,41 @@ def run_profiling(records: List[SyncedData]) -> Dict[str, Any]:
         df["Quantity"] = 1
 
     # Coerce data types
+    raw_amount = df["Amount"]
     df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
-    df["Amount"] = pd.to_numeric(df["Amount"], errors="coerce").fillna(0.0)
+    df["Amount"] = parse_amount_series(df["Amount"])
+    unreadable_amounts = int((df["Amount"].isna() & raw_amount.notna() & (raw_amount.astype(str).str.strip() != "")).sum())
+    if unreadable_amounts:
+        example = raw_amount[df["Amount"].isna() & raw_amount.notna()].iloc[0]
+        warnings.append(
+            f"{unreadable_amounts} of {rows_total} rows have an Amount that could not be read as a number "
+            f"(e.g. '{example}'); they are counted as 0."
+        )
+    df["Amount"] = df["Amount"].fillna(0.0)
     df["Quantity"] = pd.to_numeric(df["Quantity"], errors="coerce").fillna(1)
 
     # Drop rows with critical formatting failures (e.g. invalid dates)
+    bad_dates = int(df["Date"].isna().sum())
+    if bad_dates and "Date" in mapped_columns:
+        warnings.append(f"{bad_dates} of {rows_total} rows were dropped because their date could not be read.")
     df = df.dropna(subset=["Date"])
     df = df.sort_values(by="Date").reset_index(drop=True)
+
+    data_quality = {
+        "rows_total": rows_total,
+        "rows_used": int(df.shape[0]),
+        "mapped_columns": mapped_columns,
+        "warnings": warnings,
+    }
 
     if df.empty:
         return {
             "summary": {"total_revenue": 0, "total_transactions": 0, "avg_transaction_value": 0},
-            "period_metrics": {"monthly": [], "weekly": []},
+            "period_metrics": {"daily": [], "monthly": [], "weekly": []},
             "category_metrics": {"top_categories": [], "bottom_categories": []},
             "anomalies": [],
-            "correlations": {}
+            "correlations": {},
+            "data_quality": data_quality
         }
 
     # --- Calculations ---
@@ -115,6 +129,26 @@ def run_profiling(records: List[SyncedData]) -> Dict[str, Any]:
         for _, row in monthly_grp.iterrows():
             monthly_list.append({
                 "month": str(row["month"]),
+                "revenue": round(float(row["revenue"]), 2),
+                "transactions": int(row["transactions"]),
+                "growth_pct": clean_val(row["growth_pct"])
+            })
+
+    # 3b. Daily Metrics & DoD Growth (powers date-specific chat questions, e.g. "why did sales drop on X")
+    daily_list = []
+    d_df = df.copy()
+    d_df["Day"] = d_df["Date"].dt.date
+    daily_grp = d_df.groupby("Day").agg(
+        revenue=("Amount", "sum"),
+        transactions=("Amount", "count")
+    ).sort_index().reset_index()
+
+    if not daily_grp.empty:
+        daily_grp["growth_pct"] = daily_grp["revenue"].pct_change() * 100
+
+        for _, row in daily_grp.iterrows():
+            daily_list.append({
+                "date": row["Day"].isoformat(),
                 "revenue": round(float(row["revenue"]), 2),
                 "transactions": int(row["transactions"]),
                 "growth_pct": clean_val(row["growth_pct"])
@@ -192,7 +226,9 @@ def run_profiling(records: List[SyncedData]) -> Dict[str, Any]:
 
     for idx, row in df.iterrows():
         is_z_outlier = abs(row["z_score"]) > 2.5
-        is_iqr_outlier = (row["Amount"] < lower_bound) or (row["Amount"] > upper_bound)
+        # IQR fences alone flag ordinary sales in bimodal data (e.g. weekend vs weekday prices),
+        # so an IQR outlier must also sit meaningfully far from the mean (|z| > 1).
+        is_iqr_outlier = ((row["Amount"] < lower_bound) or (row["Amount"] > upper_bound)) and abs(row["z_score"]) > 1.0
         is_negative = row["Amount"] < 0
         
         # Consider a row anomalous if it is a negative value (refund), a Z-score outlier, OR an IQR outlier
@@ -223,6 +259,7 @@ def run_profiling(records: List[SyncedData]) -> Dict[str, Any]:
     profile = {
         "summary": summary,
         "period_metrics": {
+            "daily": daily_list,
             "monthly": monthly_list,
             "weekly": weekly_list
         },
@@ -231,7 +268,8 @@ def run_profiling(records: List[SyncedData]) -> Dict[str, Any]:
             "bottom_categories": bottom_categories
         },
         "anomalies": anomalies,
-        "correlations": correlations
+        "correlations": correlations,
+        "data_quality": data_quality
     }
 
     return profile

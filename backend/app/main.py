@@ -15,11 +15,20 @@ async def lifespan(app: FastAPI):
     # Shutdown: Stop scheduler execution threads
     scheduler_service.shutdown()
 
+IS_PRODUCTION = settings.ENVIRONMENT.lower() == "production"
+
+if IS_PRODUCTION and settings.SECRET_KEY.startswith("super_secret_key_change_me"):
+    raise RuntimeError("Refusing to start in production with the default SECRET_KEY. Set a strong SECRET_KEY.")
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     description="SAGE - Smart Analytics & Growth Engine API. An analyst that never clocks out.",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    # Interactive API docs are a development convenience; don't publish them in production.
+    docs_url=None if IS_PRODUCTION else "/docs",
+    redoc_url=None if IS_PRODUCTION else "/redoc",
+    openapi_url=None if IS_PRODUCTION else "/openapi.json",
 )
 
 # CORS configurations

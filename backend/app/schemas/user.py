@@ -1,4 +1,5 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
+from app.core.security import normalize_email, validate_password_strength
 from uuid import UUID
 from datetime import datetime
 from typing import Optional
@@ -6,12 +7,26 @@ from typing import Optional
 class UserBase(BaseModel):
     email: EmailStr
 
+    @field_validator("email")
+    @classmethod
+    def lowercase_email(cls, v):
+        return normalize_email(v)
+
 class UserCreate(UserBase):
     password: str
 
+    @field_validator("password")
+    @classmethod
+    def strong_enough(cls, v):
+        return validate_password_strength(v)
+
 class UserResponse(UserBase):
     id: UUID
+    name: Optional[str] = None
+    role: str
+    workspace_owner_id: Optional[UUID] = None
     is_active: bool
+    alert_email_enabled: bool
     created_at: datetime
     updated_at: datetime
 
@@ -24,3 +39,24 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     user_id: Optional[str] = None
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+    @field_validator("email")
+    @classmethod
+    def lowercase_email(cls, v):
+        return normalize_email(v)
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def strong_enough(cls, v):
+        return validate_password_strength(v)
+
+class UpdateMeRequest(BaseModel):
+    alert_email_enabled: Optional[bool] = None
+    name: Optional[str] = None

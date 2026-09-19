@@ -1,6 +1,7 @@
 import os
 import json
 import random
+import logging
 from uuid import UUID
 from datetime import datetime, timedelta
 import pandas as pd
@@ -14,6 +15,7 @@ from app.models.computed_stat import ComputedStat
 from app.models.insight import Insight
 from app.analytics.profiler import run_profiling
 from app.services.ai import AIService
+from app.services.alerts import dispatch_alerts
 
 # Google Auth imports
 from google.oauth2.credentials import Credentials
@@ -72,12 +74,13 @@ def sync_account_sheets(db: Session, account: ConnectedAccount, spreadsheet_id: 
     """
     owner_id = account.user_id
 
-    # Clear existing synced records for this sheet/source to avoid duplicates
+    # The workspace analyses ONE worksheet at a time: replace everything previously synced from
+    # Google Sheets so switching worksheets (or re-syncing) never double-counts. Uploaded files
+    # (source="csv_upload") are separate and untouched.
     db.query(SyncedData).filter(
         SyncedData.user_id == owner_id,
         SyncedData.connected_account_id == account.id,
-        SyncedData.source == "google_sheets",
-        SyncedData.external_id.like(f"{spreadsheet_id}_{sheet_name}_%")
+        SyncedData.source == "google_sheets"
     ).delete(synchronize_session=False)
     db.commit()
 
@@ -169,6 +172,49 @@ def sync_account_sheets(db: Session, account: ConnectedAccount, spreadsheet_id: 
                 detail=f"Failed to fetch data from Google Sheets API: {str(e)}"
             )
 
+def ingest_uploaded_file(db: Session, account: ConnectedAccount, df: pd.DataFrame, filename: str) -> int:
+    """
+    Ingest rows from an uploaded CSV/XLSX DataFrame into synced_data for this account,
+    mirroring the row-insert pattern used for Google Sheets sync.
+    """
+    owner_id = account.user_id
+
+    # Clear any previously uploaded rows for this same filename to avoid duplicates on re-upload
+    db.query(SyncedData).filter(
+        SyncedData.user_id == owner_id,
+        SyncedData.connected_account_id == account.id,
+        SyncedData.source == "csv_upload",
+        SyncedData.external_id.like(f"upload_{filename}_%")
+    ).delete(synchronize_session=False)
+    db.commit()
+
+    # Round-trip through pandas' own JSON encoder so numpy scalars/Timestamps
+    # become plain JSON-serializable Python values before hitting the JSONB column.
+    records_json = json.loads(df.to_json(orient="records", date_format="iso"))
+    rows_synced = 0
+
+    for idx, row_dict in enumerate(records_json):
+        record = SyncedData(
+            user_id=owner_id,
+            connected_account_id=account.id,
+            source="csv_upload",
+            external_id=f"upload_{filename}_{idx}",
+            raw_payload=row_dict,
+            synced_at=datetime.utcnow()
+        )
+        db.add(record)
+        rows_synced += 1
+
+    account.account_metadata = {
+        **account.account_metadata,
+        "last_filename": filename,
+        "last_uploaded_at": datetime.utcnow().isoformat(),
+        "rows_synced": rows_synced
+    }
+    db.commit()
+    return rows_synced
+
+
 def profile_user_data(db: Session, owner_id: UUID) -> dict:
     """
     Run deterministic profiling calculations on a user's synced transaction data.
@@ -231,10 +277,37 @@ def generate_user_insights(db: Session, owner_id: UUID) -> Insight:
     # Save to database
     insight_rec = Insight(
         user_id=owner_id,
+        computed_stat_id=latest_stat.id,
         insight_data=insight_payload
     )
     db.add(insight_rec)
     db.commit()
     db.refresh(insight_rec)
 
+    try:
+        dispatch_alerts(db, owner_id, insight_payload, latest_stat.metrics)
+    except Exception as e:
+        logging.getLogger("sage.alerts").error(f"Alert dispatch failed: {str(e)}", exc_info=True)
+
+    prune_history(db, owner_id)
+    # Later commits expire the instance; reload so callers get a fully populated record.
+    db.refresh(insight_rec)
     return insight_rec
+
+
+HISTORY_LIMIT = 100
+
+
+def prune_history(db: Session, owner_id: UUID, keep: int = HISTORY_LIMIT) -> None:
+    """The scheduler adds a stats + insight row every cycle; keep only the newest `keep` of each."""
+    for model in (Insight, ComputedStat):
+        stale_ids = [
+            row.id for row in db.query(model.id)
+            .filter(model.user_id == owner_id)
+            .order_by(model.created_at.desc())
+            .offset(keep)
+            .all()
+        ]
+        if stale_ids:
+            db.query(model).filter(model.id.in_(stale_ids)).delete(synchronize_session=False)
+    db.commit()

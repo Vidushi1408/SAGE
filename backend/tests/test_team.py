@@ -36,13 +36,13 @@ def test_team_invite_and_list(client):
         json={
             "email": member_email,
             "name": "Jane Analyst",
-            "password": "analystpassword",
             "role": "analyst"
         }
     )
     assert invite_res.status_code == 201
     assert invite_res.json()["email"] == member_email
     assert invite_res.json()["role"] == "analyst"
+    assert invite_res.json()["is_active"] is False
 
     # 5. List team again (should contain 2 users now)
     list_res2 = client.get("/api/v1/team/", headers=headers)
@@ -51,7 +51,7 @@ def test_team_invite_and_list(client):
     emails = [u["email"] for u in list_res2.json()]
     assert member_email in emails
 
-def test_team_role_restrictions(client):
+def test_team_role_restrictions(client, db_session):
     """Verify that only admin users can invite or delete team members."""
     # 1. Create owner and invite an analyst
     owner_email = f"owner_{uuid4()}@company.com"
@@ -59,15 +59,22 @@ def test_team_role_restrictions(client):
     login_owner = client.post("/api/v1/auth/login", data={"username": owner_email, "password": "ownerpassword"})
     owner_token = login_owner.json()["access_token"]
     owner_headers = {"Authorization": f"Bearer {owner_token}"}
-    
+
     analyst_email = f"analyst_{uuid4()}@company.com"
     client.post(
         "/api/v1/team/invite",
         headers=owner_headers,
-        json={"email": analyst_email, "name": "Analyst", "password": "analystpassword", "role": "analyst"}
+        json={"email": analyst_email, "name": "Analyst", "role": "analyst"}
     )
 
-    # 2. Log in as the analyst
+    # 2. Accept the invite (as would happen from the emailed link) then log in as the analyst
+    invited_user = db_session.query(User).filter(User.email == analyst_email).first()
+    accept_res = client.post(
+        "/api/v1/team/accept-invite",
+        json={"token": invited_user.invite_token, "name": "Analyst", "password": "analystpassword"}
+    )
+    assert accept_res.status_code == 200
+
     login_analyst = client.post("/api/v1/auth/login", data={"username": analyst_email, "password": "analystpassword"})
     analyst_token = login_analyst.json()["access_token"]
     analyst_headers = {"Authorization": f"Bearer {analyst_token}"}
@@ -76,11 +83,11 @@ def test_team_role_restrictions(client):
     invite_fail = client.post(
         "/api/v1/team/invite",
         headers=analyst_headers,
-        json={"email": "extra@company.com", "password": "password", "role": "viewer"}
+        json={"email": "extra@company.com", "role": "viewer"}
     )
     assert invite_fail.status_code == 403
 
-def test_team_data_sharing(client):
+def test_team_data_sharing(client, db_session):
     """Verify that invited team members query and write to the owner's database context."""
     # 1. Create owner
     owner_email = f"owner_{uuid4()}@company.com"
@@ -88,15 +95,20 @@ def test_team_data_sharing(client):
     login_owner = client.post("/api/v1/auth/login", data={"username": owner_email, "password": "ownerpassword"})
     owner_token = login_owner.json()["access_token"]
     owner_headers = {"Authorization": f"Bearer {owner_token}"}
-    
-    # 2. Invite analyst
+
+    # 2. Invite analyst and accept the invite (as would happen from the emailed link)
     analyst_email = f"analyst_{uuid4()}@company.com"
     client.post(
         "/api/v1/team/invite",
         headers=owner_headers,
-        json={"email": analyst_email, "name": "Analyst", "password": "analystpassword", "role": "analyst"}
+        json={"email": analyst_email, "name": "Analyst", "role": "analyst"}
     )
-    
+    invited_user = db_session.query(User).filter(User.email == analyst_email).first()
+    client.post(
+        "/api/v1/team/accept-invite",
+        json={"token": invited_user.invite_token, "name": "Analyst", "password": "analystpassword"}
+    )
+
     # 3. Connect mock sheets and sync data using OWNER credentials
     client.get("/api/v1/connectors/google/login", headers=owner_headers)
     

@@ -11,6 +11,8 @@ services:
         fromDatabase:
           name: sage-db
           property: connectionString
+      - key: ENVIRONMENT
+        value: production
       - key: SECRET_KEY
         generateValue: true
       - key: GOOGLE_CLIENT_ID
@@ -19,6 +21,10 @@ services:
         sync: false
       - key: ANTHROPIC_API_KEY
         sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        value: "SAGE <insights@sage.dev>"
       - key: SYNC_INTERVAL_MINUTES
         value: "30"
 

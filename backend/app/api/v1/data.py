@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 import pandas as pd
 
 from app.core.db import get_db
-from app.api.deps import get_current_user, get_workspace_owner_id
+from app.api.deps import get_current_user, get_workspace_owner_id, require_writer
 from app.models.user import User
 from app.models.synced_data import SyncedData
 from app.models.computed_stat import ComputedStat
@@ -27,7 +27,7 @@ def get_synced_data(
 
 @router.post("/profile", status_code=status.HTTP_201_CREATED)
 def trigger_profiling(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_writer),
     db: Session = Depends(get_db)
 ):
     """

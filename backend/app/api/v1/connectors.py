@@ -1,13 +1,18 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
+from pydantic import BaseModel, HttpUrl, field_validator
 from datetime import datetime, timedelta
 import urllib.parse
 import json
+import io
+import pandas as pd
 
 from app.core.config import settings
 from app.core.db import get_db
-from app.api.deps import get_current_user, get_workspace_owner_id
+from app.api.deps import get_current_user, get_workspace_owner_id, require_writer
+from app.core.security import create_oauth_state, verify_oauth_state
+from app.analytics.column_mapping import map_columns, column_warnings
 from app.models.user import User
 from app.models.connected_account import ConnectedAccount
 from app.models.synced_data import SyncedData
@@ -48,16 +53,20 @@ def get_google_flow(state: str = None) -> Flow:
     return flow
 
 
+def google_configured() -> bool:
+    return bool(settings.GOOGLE_CLIENT_ID and settings.GOOGLE_CLIENT_SECRET)
+
+
 @router.get("/google/login")
-def google_login(current_user: User = Depends(get_current_user)):
+def google_login(current_user: User = Depends(require_writer)):
     """
     Generate Google OAuth login URL.
     If GOOGLE_CLIENT_ID is not configured, fall back to Mock OAuth Mode.
+    The connection always belongs to the workspace owner, even when a teammate starts it.
     """
-    state_payload = {"user_id": str(current_user.id)}
-    state_str = urllib.parse.quote(json.dumps(state_payload))
-    
-    if not settings.GOOGLE_CLIENT_ID or not settings.GOOGLE_CLIENT_SECRET:
+    state_str = create_oauth_state(get_workspace_owner_id(current_user))
+
+    if not google_configured():
         # Fallback Mock OAuth redirect URL
         mock_callback_url = (
             f"http://localhost:8000/api/v1/connectors/google/callback"
@@ -77,18 +86,17 @@ def google_login(current_user: User = Depends(get_current_user)):
 @router.get("/google/callback")
 def google_callback(code: str, state: str, db: Session = Depends(get_db)):
     """Google OAuth2 callback endpoint."""
-    try:
-        # Decode state to recover user ID
-        state_decoded = json.loads(urllib.parse.unquote(state))
-        user_id = state_decoded.get("user_id")
-    except Exception:
+    # The state is signed by /google/login, so it can't be forged to attach an
+    # account to someone else's workspace.
+    user_id = verify_oauth_state(state)
+    if not user_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid OAuth state parameter"
+            detail="Invalid or expired OAuth state parameter"
         )
-        
-    # Check if we are running in Mock Mode
-    if code == "mock_code" or not settings.GOOGLE_CLIENT_ID or not settings.GOOGLE_CLIENT_SECRET:
+
+    # Mock mode only when Google isn't configured (never a bypass in production)
+    if not google_configured():
         # Create/Update Mock Connected Account
         account = db.query(ConnectedAccount).filter(
             ConnectedAccount.user_id == user_id,
@@ -290,7 +298,7 @@ def list_sheets(current_user: User = Depends(get_current_user), db: Session = De
 def sync_sheet(
     spreadsheet_id: str,
     sheet_name: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_writer),
     db: Session = Depends(get_db)
 ):
     """
@@ -313,4 +321,186 @@ def sync_sheet(
     from app.services.sync_service import sync_account_sheets
     rows_synced = sync_account_sheets(db, account, spreadsheet_id, sheet_name)
     return {"status": "success", "rows_synced": rows_synced, "message": f"Successfully synced {rows_synced} rows"}
+
+
+# --- Slack Alerts Connector ---
+
+ALLOWED_SLACK_WEBHOOK_HOSTS = {"hooks.slack.com", "hooks.slack-gov.com"}
+
+
+class SlackConnectRequest(BaseModel):
+    webhook_url: HttpUrl
+
+    @field_validator("webhook_url")
+    @classmethod
+    def must_be_slack_webhook(cls, v):
+        # The server POSTs to this URL, so it must never point at arbitrary/internal hosts.
+        if v.scheme != "https" or v.host not in ALLOWED_SLACK_WEBHOOK_HOSTS:
+            raise ValueError("Webhook must be an https://hooks.slack.com/... Incoming Webhook URL")
+        return v
+
+
+@router.get("/slack")
+def get_slack_connection(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Return the Slack alert connection status for the current workspace."""
+    owner_id = get_workspace_owner_id(current_user)
+    account = db.query(ConnectedAccount).filter(
+        ConnectedAccount.user_id == owner_id,
+        ConnectedAccount.service == "slack"
+    ).first()
+
+    if not account:
+        return {"connected": False}
+
+    # The webhook URL is a secret: only admins may see it.
+    if current_user.role == "admin":
+        return {"connected": True, "webhook_url": account.access_token}
+    return {"connected": True}
+
+
+@router.post("/slack")
+def connect_slack(
+    payload: SlackConnectRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Save or update the workspace's Slack Incoming Webhook URL for alerts."""
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admin users can manage Slack alerts."
+        )
+
+    owner_id = get_workspace_owner_id(current_user)
+    account = db.query(ConnectedAccount).filter(
+        ConnectedAccount.user_id == owner_id,
+        ConnectedAccount.service == "slack"
+    ).first()
+
+    webhook_url_str = str(payload.webhook_url)
+    if not account:
+        account = ConnectedAccount(
+            user_id=owner_id,
+            service="slack",
+            access_token=webhook_url_str,
+            account_metadata={"connected_at": datetime.utcnow().isoformat()}
+        )
+        db.add(account)
+    else:
+        account.access_token = webhook_url_str
+
+    db.commit()
+    return {"status": "success", "connected": True}
+
+
+@router.delete("/slack")
+def disconnect_slack(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Remove the workspace's Slack alert connection."""
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admin users can manage Slack alerts."
+        )
+
+    owner_id = get_workspace_owner_id(current_user)
+    account = db.query(ConnectedAccount).filter(
+        ConnectedAccount.user_id == owner_id,
+        ConnectedAccount.service == "slack"
+    ).first()
+
+    if account:
+        db.delete(account)
+        db.commit()
+
+    return {"status": "success", "connected": False}
+
+
+# --- CSV / XLSX Upload Connector ---
+
+MAX_UPLOAD_SIZE_BYTES = 5 * 1024 * 1024  # 5MB
+ALLOWED_UPLOAD_EXTENSIONS = (".csv", ".xlsx")
+
+
+def read_csv_flexibly(contents: bytes) -> pd.DataFrame:
+    """Parse a CSV, sniffing the delimiter (comma, semicolon, tab, pipe) and tolerating BOMs / Latin-1."""
+    for encoding in ("utf-8-sig", "latin-1"):
+        try:
+            return pd.read_csv(io.BytesIO(contents), sep=None, engine="python", encoding=encoding)
+        except UnicodeDecodeError:
+            continue
+    raise ValueError("Unsupported text encoding")
+
+
+@router.post("/upload")
+async def upload_file(
+    file: UploadFile = File(...),
+    current_user: User = Depends(require_writer),
+    db: Session = Depends(get_db)
+):
+    """
+    Upload a CSV or XLSX file as a data source. Rows are ingested into the same
+    synced_data table used by Google Sheets, so they flow through profiling automatically.
+    """
+    filename = file.filename or "upload"
+    lower_name = filename.lower()
+    if not lower_name.endswith(ALLOWED_UPLOAD_EXTENSIONS):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only .csv and .xlsx files are supported."
+        )
+
+    contents = await file.read()
+    if len(contents) > MAX_UPLOAD_SIZE_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File is too large. Maximum upload size is 5MB."
+        )
+
+    try:
+        if lower_name.endswith(".csv"):
+            if b"\x00" in contents[:65536]:
+                raise ValueError("this doesn't look like a text CSV file")
+            df = read_csv_flexibly(contents)
+        else:
+            df = pd.read_excel(io.BytesIO(contents))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Could not parse the uploaded file: {str(e)}"
+        )
+
+    if df.empty:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The uploaded file has no data rows."
+        )
+
+    owner_id = get_workspace_owner_id(current_user)
+    account = db.query(ConnectedAccount).filter(
+        ConnectedAccount.user_id == owner_id,
+        ConnectedAccount.service == "csv_upload"
+    ).first()
+
+    if not account:
+        account = ConnectedAccount(
+            user_id=owner_id,
+            service="csv_upload",
+            access_token="uploaded_file",
+            account_metadata={}
+        )
+        db.add(account)
+        db.commit()
+        db.refresh(account)
+
+    from app.services.sync_service import ingest_uploaded_file
+    rows_synced = ingest_uploaded_file(db, account, df, filename)
+
+    _, mapping = map_columns(df)
+    warnings = column_warnings([str(c) for c in df.columns], mapping)
+    return {
+        "status": "success",
+        "rows_synced": rows_synced,
+        "message": f"Successfully imported {rows_synced} rows from {filename}",
+        "warnings": warnings,
+    }
 

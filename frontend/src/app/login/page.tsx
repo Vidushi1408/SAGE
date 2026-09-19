@@ -14,16 +14,12 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
 
   const checkRedirection = async () => {
-    try {
-      const sheets = await api.listSheets();
-      if (sheets.length > 0) {
-        router.push("/dashboard");
-      } else {
-        router.push("/onboarding");
-      }
-    } catch (err) {
-      router.push("/onboarding");
-    }
+    // Any existing data source counts: a connected Google account or already-analysed
+    // (e.g. uploaded) data. Only brand-new workspaces go through onboarding.
+    const [sheets, profile] = await Promise.allSettled([api.listSheets(), api.getLatestProfile()]);
+    const hasSheets = sheets.status === "fulfilled" && sheets.value.length > 0;
+    const hasProfile = profile.status === "fulfilled";
+    router.push(hasSheets || hasProfile ? "/dashboard" : "/onboarding");
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -85,9 +81,9 @@ export default function Login() {
 
           <form onSubmit={handleLogin} className="space-y-4 mb-6">
             <div>
-              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Email Address</label>
-              <input
-                type="email"
+              <label htmlFor="field-email-address" className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Email Address</label>
+              <input id="field-email-address" 
+                type="email" autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="name@business.com"
@@ -97,9 +93,12 @@ export default function Login() {
             </div>
 
             <div>
-              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Password</label>
-              <input
-                type="password"
+              <div className="flex items-center justify-between mb-1.5">
+                <label htmlFor="field-password" className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest">Password</label>
+                <Link href="/forgot-password" className="text-[10px] text-indigo-400 hover:underline font-semibold">Forgot password?</Link>
+              </div>
+              <input id="field-password" 
+                type="password" autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"

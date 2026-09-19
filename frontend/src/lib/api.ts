@@ -7,6 +7,7 @@ export interface User {
   role: string;
   workspace_owner_id?: string;
   is_active: boolean;
+  alert_email_enabled?: boolean;
   created_at: string;
 }
 
@@ -26,6 +27,36 @@ export interface InsightObject {
 export interface InsightsPayload {
   recommendation: string;
   insights: InsightObject[];
+}
+
+export interface InsightHistoryEntry {
+  id: string;
+  created_at: string;
+  recommendation: string | null;
+}
+
+export interface ChatMessage {
+  id?: string;
+  role: "user" | "assistant";
+  content: string;
+  chart?: InsightObject | null;
+  created_at?: string;
+}
+
+export interface SlackStatus {
+  connected: boolean;
+  webhook_url?: string;
+}
+
+// FastAPI returns a string for HTTPExceptions but a list of {msg, loc} objects for validation errors.
+function formatErrorDetail(detail: unknown): string {
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    return detail
+      .map((d) => (d && typeof d === "object" && "msg" in d ? String((d as { msg: unknown }).msg).replace(/^Value error, /, "") : String(d)))
+      .join("; ");
+  }
+  return "";
 }
 
 class ApiClient {
@@ -68,17 +99,41 @@ class ApiClient {
     };
 
     const response = await fetch(url, config);
-
-    if (response.status === 401) {
-      this.clearToken();
-      if (typeof window !== "undefined" && window.location.pathname !== "/") {
-        window.location.href = "/";
-      }
-    }
+    this.handleExpiredSession(response, !!token);
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ detail: "Unknown error occurred" }));
-      throw new Error(errorData.detail || `HTTP error ${response.status}`);
+      throw new Error(formatErrorDetail(errorData.detail) || `HTTP error ${response.status}`);
+    }
+
+    return response.json() as Promise<T>;
+  }
+
+  // A 401 only means "session expired" when we actually sent a token. Without one
+  // (e.g. a wrong password on the login form) the caller must see the real error
+  // message instead of being bounced to the home page.
+  private handleExpiredSession(response: Response, hadToken: boolean) {
+    if (response.status !== 401 || !hadToken) return;
+    this.clearToken();
+    if (typeof window !== "undefined" && window.location.pathname !== "/login") {
+      window.location.href = "/login";
+    }
+  }
+
+  private async uploadRequest<T>(endpoint: string, formData: FormData): Promise<T> {
+    const url = `${API_BASE_URL}${endpoint}`;
+    const headers = new Headers();
+    const token = this.getToken();
+    if (token) {
+      headers.set("Authorization", `Bearer ${token}`);
+    }
+
+    const response = await fetch(url, { method: "POST", headers, body: formData });
+    this.handleExpiredSession(response, !!token);
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ detail: "Unknown error occurred" }));
+      throw new Error(formatErrorDetail(errorData.detail) || `HTTP error ${response.status}`);
     }
 
     return response.json() as Promise<T>;
@@ -87,6 +142,8 @@ class ApiClient {
   // --- Auth ---
 
   public async login(email: string, password: string): Promise<{ access_token: string }> {
+    // Drop any stale token so a failed login isn't mistaken for an expired session.
+    this.clearToken();
     const formData = new URLSearchParams();
     formData.append("username", email);
     formData.append("password", password);
@@ -117,6 +174,30 @@ class ApiClient {
     return this.request<User>("/api/v1/auth/me");
   }
 
+  public async updateMe(update: { alert_email_enabled?: boolean; name?: string }): Promise<User> {
+    return this.request<User>("/api/v1/auth/me", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(update)
+    });
+  }
+
+  public async forgotPassword(email: string): Promise<{ status: string; message: string }> {
+    return this.request("/api/v1/auth/forgot-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email })
+    });
+  }
+
+  public async resetPassword(token: string, newPassword: string): Promise<{ status: string; message: string }> {
+    return this.request("/api/v1/auth/reset-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, new_password: newPassword })
+    });
+  }
+
   // --- Sheets Connector ---
 
   public async getGoogleLoginUrl(): Promise<{ url: string; is_mock: boolean }> {
@@ -132,6 +213,30 @@ class ApiClient {
       `/api/v1/connectors/sheets/sync?spreadsheet_id=${encodeURIComponent(spreadsheetId)}&sheet_name=${encodeURIComponent(sheetName)}`,
       { method: "POST" }
     );
+  }
+
+  public async uploadFile(file: File): Promise<{ status: string; rows_synced: number; message: string; warnings?: string[] }> {
+    const formData = new FormData();
+    formData.append("file", file);
+    return this.uploadRequest("/api/v1/connectors/upload", formData);
+  }
+
+  // --- Slack Connector ---
+
+  public async getSlackStatus(): Promise<SlackStatus> {
+    return this.request<SlackStatus>("/api/v1/connectors/slack");
+  }
+
+  public async connectSlack(webhookUrl: string): Promise<{ status: string; connected: boolean }> {
+    return this.request("/api/v1/connectors/slack", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ webhook_url: webhookUrl })
+    });
+  }
+
+  public async disconnectSlack(): Promise<{ status: string; connected: boolean }> {
+    return this.request("/api/v1/connectors/slack", { method: "DELETE" });
   }
 
   // --- Profiling ---
@@ -154,13 +259,21 @@ class ApiClient {
     return this.request<{ insight_data: InsightsPayload }>("/api/v1/insights/latest");
   }
 
+  public async getInsightHistory(limit = 10): Promise<InsightHistoryEntry[]> {
+    return this.request<InsightHistoryEntry[]>(`/api/v1/insights/history?limit=${limit}`);
+  }
+
+  public async getInsightById(id: string): Promise<{ id: string; created_at: string; insight_data: InsightsPayload; computed_stats: any }> {
+    return this.request(`/api/v1/insights/${id}`);
+  }
+
   // --- Team ---
 
   public async listTeamMembers(): Promise<User[]> {
     return this.request<User[]>("/api/v1/team");
   }
 
-  public async inviteTeamMember(member: { email: string; name?: string; password?: string; role: string }): Promise<User> {
+  public async inviteTeamMember(member: { email: string; name?: string; role: string }): Promise<User> {
     return this.request<User>("/api/v1/team/invite", {
       method: "POST",
       headers: {
@@ -170,10 +283,36 @@ class ApiClient {
     });
   }
 
+  public async acceptInvite(token: string, name: string, password: string): Promise<User> {
+    return this.request<User>("/api/v1/team/accept-invite", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, name, password })
+    });
+  }
+
+  public async resendInvite(memberId: string): Promise<User> {
+    return this.request<User>(`/api/v1/team/${memberId}/resend-invite`, { method: "POST" });
+  }
+
   public async deleteTeamMember(memberId: string): Promise<any> {
     return this.request<any>(`/api/v1/team/${memberId}`, {
       method: "DELETE"
     });
+  }
+
+  // --- Chat ---
+
+  public async sendChatMessage(message: string): Promise<ChatMessage> {
+    return this.request<ChatMessage>("/api/v1/chat/message", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message })
+    });
+  }
+
+  public async getChatHistory(): Promise<{ history: ChatMessage[] }> {
+    return this.request<{ history: ChatMessage[] }>("/api/v1/chat/history");
   }
 }
 

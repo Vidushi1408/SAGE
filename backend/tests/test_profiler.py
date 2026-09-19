@@ -41,6 +41,12 @@ def test_profiler_math_calculations():
     assert profile["summary"]["total_transactions"] == 4
     assert profile["summary"]["avg_transaction_value"] == 362.50
     
+    # Verify daily metrics were computed for each distinct transaction date
+    daily = profile["period_metrics"]["daily"]
+    assert len(daily) == 4
+    assert daily[0]["date"] == "2026-05-01"
+    assert daily[0]["revenue"] == 100.00
+
     # Verify categories
     top_cats = profile["category_metrics"]["top_categories"]
     assert len(top_cats) == 3
