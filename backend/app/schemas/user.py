@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from app.core.security import normalize_email, validate_password_strength
 from uuid import UUID
 from datetime import datetime
@@ -57,6 +57,20 @@ class ResetPasswordRequest(BaseModel):
     def strong_enough(cls, v):
         return validate_password_strength(v)
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def strong_enough(cls, v):
+        return validate_password_strength(v)
+
 class UpdateMeRequest(BaseModel):
     alert_email_enabled: Optional[bool] = None
-    name: Optional[str] = None
+    name: Optional[str] = Field(default=None, max_length=100)
+
+    @field_validator("name")
+    @classmethod
+    def clean_name(cls, v):
+        return v.strip() if v is not None else v

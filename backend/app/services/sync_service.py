@@ -15,13 +15,11 @@ from app.models.synced_data import SyncedData
 from app.models.computed_stat import ComputedStat
 from app.models.insight import Insight
 from app.analytics.profiler import run_profiling
+from app.services import google_sheets
 from app.services.ai import AIService
 from app.services.alerts import dispatch_alerts
 
 # Google Auth imports
-from google.oauth2.credentials import Credentials
-from googleapiclient.discovery import build
-from google.auth.exceptions import RefreshError
 
 def generate_mock_business_data(sheet_name: str = "Sales"):
     """
@@ -75,107 +73,45 @@ def generate_mock_business_data(sheet_name: str = "Sales"):
 
 def sync_account_sheets(db: Session, account: ConnectedAccount, spreadsheet_id: str, sheet_name: str) -> int:
     """
-    Sync Google Sheet rows into synced_data table for a specific account.
+    Sync one Google Sheets worksheet into synced_data for this account.
+
+    The workspace analyses ONE worksheet at a time, so previously synced Google Sheets rows are
+    replaced (never double-counted). Uploaded files (source="csv_upload") are untouched. Rows are
+    fetched BEFORE anything is deleted, so a Google error leaves the existing data intact.
     """
     owner_id = account.user_id
 
-    # The workspace analyses ONE worksheet at a time: replace everything previously synced from
-    # Google Sheets so switching worksheets (or re-syncing) never double-counts. Uploaded files
-    # (source="csv_upload") are separate and untouched.
+    if google_sheets.is_mock(account):
+        rows = generate_mock_business_data(sheet_name)
+    else:
+        rows = google_sheets.fetch_rows(account, db, spreadsheet_id, sheet_name)  # HTTPException propagates
+
     db.query(SyncedData).filter(
         SyncedData.user_id == owner_id,
         SyncedData.connected_account_id == account.id,
         SyncedData.source == "google_sheets"
     ).delete(synchronize_session=False)
+
+    for idx, row in enumerate(rows):
+        db.add(SyncedData(
+            user_id=owner_id,
+            connected_account_id=account.id,
+            source="google_sheets",
+            external_id=f"{spreadsheet_id}_{sheet_name}_{idx}",
+            raw_payload=row,
+            synced_at=datetime.utcnow()
+        ))
+
+    account.account_metadata = {
+        **(account.account_metadata or {}),
+        "connected_spreadsheet_id": spreadsheet_id,
+        "connected_sheet_name": sheet_name,
+        "last_synced_at": datetime.utcnow().isoformat(),
+        "rows_synced": len(rows)
+    }
     db.commit()
+    return len(rows)
 
-    rows_synced = 0
-
-    if account.access_token == "mock_access_token":
-        # Generate and insert mock data rows
-        mock_data = generate_mock_business_data(sheet_name)
-        
-        for idx, row in enumerate(mock_data):
-            record = SyncedData(
-                user_id=owner_id,
-                connected_account_id=account.id,
-                source="google_sheets",
-                external_id=f"{spreadsheet_id}_{sheet_name}_{idx}",
-                raw_payload=row,
-                synced_at=datetime.utcnow()
-            )
-            db.add(record)
-            rows_synced += 1
-            
-        # Update metadata to store connected spreadsheet info
-        account.account_metadata = {
-            **account.account_metadata,
-            "connected_spreadsheet_id": spreadsheet_id,
-            "connected_sheet_name": sheet_name,
-            "last_synced_at": datetime.utcnow().isoformat(),
-            "rows_synced": rows_synced
-        }
-        db.commit()
-        return rows_synced
-
-    else:
-        # Real Google API sync
-        creds = Credentials(
-            token=account.access_token,
-            refresh_token=account.refresh_token,
-            token_uri="https://oauth2.googleapis.com/token",
-            client_id=settings.GOOGLE_CLIENT_ID,
-            client_secret=settings.GOOGLE_CLIENT_SECRET,
-            scopes=account.scopes.split(",") if account.scopes else None
-        )
-        
-        try:
-            service = build("sheets", "v4", credentials=creds)
-            sheet = service.spreadsheets()
-            result = sheet.values().get(
-                spreadsheetId=spreadsheet_id, 
-                range=sheet_name
-            ).execute()
-            
-            values = result.get("values", [])
-            if not values:
-                return 0
-                
-            headers = values[0]
-            headers = [str(h).strip() for h in headers]
-            
-            for idx, row_vals in enumerate(values[1:], start=1):
-                row_vals += [""] * (len(headers) - len(row_vals))
-                row_vals = row_vals[:len(headers)]
-                row_dict = dict(zip(headers, row_vals))
-                
-                record = SyncedData(
-                    user_id=owner_id,
-                    connected_account_id=account.id,
-                    source="google_sheets",
-                    external_id=f"{spreadsheet_id}_{sheet_name}_{idx}",
-                    raw_payload=row_dict,
-                    synced_at=datetime.utcnow()
-                )
-                db.add(record)
-                rows_synced += 1
-                
-            account.account_metadata = {
-                **account.account_metadata,
-                "connected_spreadsheet_id": spreadsheet_id,
-                "connected_sheet_name": sheet_name,
-                "last_synced_at": datetime.utcnow().isoformat(),
-                "rows_synced": rows_synced
-            }
-            db.commit()
-            return rows_synced
-            
-        except Exception as e:
-            db.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to fetch data from Google Sheets API: {str(e)}"
-            )
 
 def ingest_uploaded_file(db: Session, account: ConnectedAccount, df: pd.DataFrame, filename: str) -> int:
     """

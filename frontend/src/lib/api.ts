@@ -43,6 +43,19 @@ export interface ChatMessage {
   created_at?: string;
 }
 
+export interface GoogleStatus {
+  connected: boolean;
+  configured?: boolean;
+  is_mock?: boolean;
+  email?: string;
+  name?: string;
+  connected_at?: string;
+  spreadsheet_id?: string;
+  sheet_name?: string;
+  last_synced_at?: string;
+  rows_synced?: number;
+}
+
 export interface SlackStatus {
   connected: boolean;
   webhook_url?: string;
@@ -183,6 +196,17 @@ class ApiClient {
     });
   }
 
+  public async changePassword(currentPassword: string, newPassword: string): Promise<{ access_token: string }> {
+    const res = await this.request<{ access_token: string }>("/api/v1/auth/change-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ current_password: currentPassword, new_password: newPassword })
+    });
+    // Changing the password revokes the old token; keep this session alive with the fresh one.
+    this.setToken(res.access_token);
+    return res;
+  }
+
   public async forgotPassword(email: string): Promise<{ status: string; message: string }> {
     return this.request("/api/v1/auth/forgot-password", {
       method: "POST",
@@ -203,6 +227,22 @@ class ApiClient {
 
   public async getGoogleLoginUrl(): Promise<{ url: string; is_mock: boolean }> {
     return this.request<{ url: string; is_mock: boolean }>("/api/v1/connectors/google/login");
+  }
+
+  public async getGoogleStatus(): Promise<GoogleStatus> {
+    return this.request<GoogleStatus>("/api/v1/connectors/google/status");
+  }
+
+  public async disconnectGoogle(): Promise<{ status: string; connected: boolean }> {
+    return this.request<{ status: string; connected: boolean }>("/api/v1/connectors/google", { method: "DELETE" });
+  }
+
+  public async lookupSheet(url: string): Promise<Sheet> {
+    return this.request<Sheet>("/api/v1/connectors/sheets/lookup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url })
+    });
   }
 
   public async listSheets(): Promise<Sheet[]> {
@@ -300,6 +340,12 @@ class ApiClient {
     return this.request<{ message?: string }>(`/api/v1/team/${memberId}`, {
       method: "DELETE"
     });
+  }
+
+  // --- Raw transactions ---
+
+  public async getTransactions(): Promise<{ count: number; data: Record<string, unknown>[] }> {
+    return this.request<{ count: number; data: Record<string, unknown>[] }>("/api/v1/data/");
   }
 
   // --- Chat ---

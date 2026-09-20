@@ -6,6 +6,9 @@ from datetime import datetime, timedelta
 import urllib.parse
 import json
 import io
+import logging
+import os
+import httpx
 import pandas as pd
 
 from app.core.config import settings
@@ -16,21 +19,31 @@ from app.analytics.column_mapping import map_columns, column_warnings
 from app.models.user import User
 from app.models.connected_account import ConnectedAccount
 from app.models.synced_data import SyncedData
+from app.services import google_sheets
+from app.services.token_crypto import decrypt_token, encrypt_token
 
 # Google Auth imports
 from google_auth_oauthlib.flow import Flow
-from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
-from google.auth.exceptions import RefreshError
 
 router = APIRouter()
+logger = logging.getLogger("sage.connectors")
 
 GOOGLE_SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets.readonly",
+    "https://www.googleapis.com/auth/drive.metadata.readonly",  # list the user's spreadsheets (names only)
     "https://www.googleapis.com/auth/userinfo.profile",
     "https://www.googleapis.com/auth/userinfo.email",
     "openid"
 ]
+SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets.readonly"
+
+# Google may return a different (e.g. narrower, user-edited) scope set than requested; accept it and
+# verify the one scope we truly need ourselves instead of letting oauthlib raise.
+os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")
+if settings.ENVIRONMENT != "production" and settings.GOOGLE_REDIRECT_URI.startswith("http://"):
+    os.environ.setdefault("OAUTHLIB_INSECURE_TRANSPORT", "1")  # local http://localhost redirect only
+
 
 def get_google_flow(state: str = None) -> Flow:
     """Build a Google Flow object dynamically from app settings."""
@@ -43,11 +56,14 @@ def get_google_flow(state: str = None) -> Flow:
             "redirect_uris": [settings.GOOGLE_REDIRECT_URI],
         }
     }
-    
+
+    # Login and callback are separate requests (and separate Flow objects), so PKCE's per-flow code
+    # verifier would be lost. This is a confidential web client (it has a secret), so PKCE isn't needed.
     flow = Flow.from_client_config(
         client_config,
         scopes=GOOGLE_SCOPES,
-        state=state
+        state=state,
+        autogenerate_code_verifier=False,
     )
     flow.redirect_uri = settings.GOOGLE_REDIRECT_URI
     return flow
@@ -55,6 +71,17 @@ def get_google_flow(state: str = None) -> Flow:
 
 def google_configured() -> bool:
     return bool(settings.GOOGLE_CLIENT_ID and settings.GOOGLE_CLIENT_SECRET)
+
+
+def _google_account(db: Session, owner_id) -> ConnectedAccount | None:
+    return db.query(ConnectedAccount).filter(
+        ConnectedAccount.user_id == owner_id,
+        ConnectedAccount.service == "google_sheets"
+    ).first()
+
+
+def _back_to_app(path: str, **params) -> RedirectResponse:
+    return RedirectResponse(url=f"{settings.FRONTEND_URL}{path}?{urllib.parse.urlencode(params)}")
 
 
 @router.get("/google/login")
@@ -73,19 +100,24 @@ def google_login(current_user: User = Depends(require_writer)):
             f"?state={state_str}&code=mock_code"
         )
         return {"url": mock_callback_url, "is_mock": True}
-        
+
     flow = get_google_flow(state=state_str)
     authorization_url, _ = flow.authorization_url(
-        access_type="offline",
-        include_granted_scopes="true",
-        prompt="consent"
+        access_type="offline",          # get a refresh token so background syncs keep working
+        include_granted_scopes="false",
+        prompt="consent"                # always return a refresh token, even on reconnect
     )
     return {"url": authorization_url, "is_mock": False}
 
 
 @router.get("/google/callback")
-def google_callback(code: str, state: str, db: Session = Depends(get_db)):
-    """Google OAuth2 callback endpoint."""
+def google_callback(
+    state: str,
+    code: str | None = None,
+    error: str | None = None,
+    db: Session = Depends(get_db)
+):
+    """Google OAuth2 callback endpoint. Always ends in a redirect back to the app, never a raw error page."""
     # The state is signed by /google/login, so it can't be forged to attach an
     # account to someone else's workspace.
     user_id = verify_oauth_state(state)
@@ -95,203 +127,164 @@ def google_callback(code: str, state: str, db: Session = Depends(get_db)):
             detail="Invalid or expired OAuth state parameter"
         )
 
+    if error or not code:
+        msg = "You cancelled the Google connection." if error == "access_denied" else "Google didn't complete the connection."
+        return _back_to_app("/data", google_error=msg)
+
     # Mock mode only when Google isn't configured (never a bypass in production)
     if not google_configured():
-        # Create/Update Mock Connected Account
-        account = db.query(ConnectedAccount).filter(
-            ConnectedAccount.user_id == user_id,
-            ConnectedAccount.service == "google_sheets"
-        ).first()
-        
+        meta = {"email": "demo-account@gmail.com", "name": "Sage Coffee Shop Demo Account",
+                "connected_at": datetime.utcnow().isoformat()}
+        account = _google_account(db, user_id)
         if not account:
             account = ConnectedAccount(
-                user_id=user_id,
-                service="google_sheets",
-                access_token="mock_access_token",
-                refresh_token="mock_refresh_token",
+                user_id=user_id, service="google_sheets",
+                access_token="mock_access_token", refresh_token="mock_refresh_token",
                 token_expires_at=datetime.utcnow() + timedelta(hours=24),
-                scopes=" ".join(GOOGLE_SCOPES),
-                account_metadata={
-                    "email": "demo-account@gmail.com",
-                    "name": "Sage Coffee Shop Demo Account",
-                    "connected_at": datetime.utcnow().isoformat()
-                }
+                scopes=" ".join(GOOGLE_SCOPES), account_metadata=meta
             )
             db.add(account)
         else:
             account.access_token = "mock_access_token"
             account.refresh_token = "mock_refresh_token"
             account.token_expires_at = datetime.utcnow() + timedelta(hours=24)
-            account.account_metadata = {
-                "email": "demo-account@gmail.com",
-                "name": "Sage Coffee Shop Demo Account (Reconnected)",
-                "connected_at": datetime.utcnow().isoformat()
-            }
+            account.account_metadata = meta
         db.commit()
-        
-        # Redirect user back to Next.js dashboard
-        return RedirectResponse(url=f"{settings.FRONTEND_URL}/dashboard?connected=google_sheets&mock=true")
+        return _back_to_app("/dashboard", connected="google_sheets", mock="true")
 
-    # Real Google OAuth Code Exchange
+    # Real Google OAuth code exchange
     try:
         flow = get_google_flow(state=state)
         flow.fetch_token(code=code)
         credentials = flow.credentials
-        
-        # Pull profile metadata (email)
-        user_info_service = build("oauth2", "v2", credentials=credentials)
-        user_info = user_info_service.userinfo().get().execute()
-        email = user_info.get("email", "unknown@gmail.com")
-        name = user_info.get("name", "Connected Google Account")
-        
-        # Store in database
-        account = db.query(ConnectedAccount).filter(
-            ConnectedAccount.user_id == user_id,
-            ConnectedAccount.service == "google_sheets"
-        ).first()
-        
-        expires_at = None
-        if credentials.expiry:
-            expires_at = credentials.expiry
-            
-        metadata_payload = {
-            "email": email,
-            "name": name,
-            "connected_at": datetime.utcnow().isoformat()
+
+        granted = set(credentials.scopes or [])
+        if SHEETS_SCOPE not in granted:
+            return _back_to_app("/data", google_error="SAGE needs permission to read your spreadsheets. Please reconnect and tick the Sheets access box.")
+
+        info = build("oauth2", "v2", credentials=credentials, cache_discovery=False).userinfo().get().execute()
+        meta = {
+            "email": info.get("email", "unknown"),
+            "name": info.get("name", "Google account"),
+            "connected_at": datetime.utcnow().isoformat(),
+            "can_list_drive": "https://www.googleapis.com/auth/drive.metadata.readonly" in granted,
         }
-        
+
+        account = _google_account(db, user_id)
         if not account:
-            account = ConnectedAccount(
-                user_id=user_id,
-                service="google_sheets",
-                access_token=credentials.token,
-                refresh_token=credentials.refresh_token,
-                token_expires_at=expires_at,
-                scopes=" ".join(credentials.scopes),
-                account_metadata=metadata_payload
-            )
+            account = ConnectedAccount(user_id=user_id, service="google_sheets")
             db.add(account)
-        else:
-            account.access_token = credentials.token
-            if credentials.refresh_token:
-                account.refresh_token = credentials.refresh_token
-            account.token_expires_at = expires_at
-            account.account_metadata = metadata_payload
-            
+        elif account.account_metadata:
+            # Reconnecting keeps the previously chosen spreadsheet/worksheet.
+            meta = {**account.account_metadata, **meta}
+
+        account.access_token = encrypt_token(credentials.token)
+        if credentials.refresh_token:  # Google only sends this on consent; never overwrite a good one with None
+            account.refresh_token = encrypt_token(credentials.refresh_token)
+        account.token_expires_at = credentials.expiry
+        account.scopes = " ".join(granted)
+        account.account_metadata = meta
         db.commit()
-        return RedirectResponse(url=f"{settings.FRONTEND_URL}/dashboard?connected=google_sheets")
-        
+        return _back_to_app("/dashboard", connected="google_sheets")
+
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"OAuth code exchange failed: {str(e)}"
-        )
+        logger.error("Google OAuth code exchange failed: %s", e, exc_info=True)
+        return _back_to_app("/data", google_error="Google sign-in failed. Please try connecting again.")
 
 
-def refresh_account_token(account: ConnectedAccount, db: Session) -> Credentials:
-    """Helper to refresh expired Google OAuth credentials."""
-    if account.service != "google_sheets":
-        raise ValueError("Token refresh is only implemented for Google Sheets")
+@router.get("/google/status")
+def google_status(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Who the workspace's Google account is, and which worksheet is being synced."""
+    account = _google_account(db, get_workspace_owner_id(current_user))
+    if not account:
+        return {"connected": False, "configured": google_configured()}
+    meta = account.account_metadata or {}
+    return {
+        "connected": True,
+        "configured": google_configured(),
+        "is_mock": google_sheets.is_mock(account),
+        "email": meta.get("email"),
+        "name": meta.get("name"),
+        "connected_at": meta.get("connected_at"),
+        "spreadsheet_id": meta.get("connected_spreadsheet_id"),
+        "sheet_name": meta.get("connected_sheet_name"),
+        "last_synced_at": meta.get("last_synced_at"),
+        "rows_synced": meta.get("rows_synced"),
+    }
 
-    # Reconstruct credentials object
-    creds = Credentials(
-        token=account.access_token,
-        refresh_token=account.refresh_token,
-        token_uri="https://oauth2.googleapis.com/token",
-        client_id=settings.GOOGLE_CLIENT_ID,
-        client_secret=settings.GOOGLE_CLIENT_SECRET
-    )
 
-    # Check if expired or expiring within 5 minutes
-    if account.token_expires_at and datetime.utcnow() >= account.token_expires_at - timedelta(minutes=5):
-        if not account.refresh_token:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Access token is expired and no refresh token is available. Please reconnect your account."
-            )
-        try:
-            from google.auth.transport.requests import Request
-            creds.refresh(Request())
-            account.access_token = creds.token
-            if creds.expiry:
-                account.token_expires_at = creds.expiry
-            db.commit()
-        except RefreshError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Failed to refresh Google credentials. Please reconnect your account."
-            )
-            
-    return creds
+@router.delete("/google")
+def google_disconnect(current_user: User = Depends(require_writer), db: Session = Depends(get_db)):
+    """Disconnect Google: revoke our access, forget the tokens, and remove the rows imported from Sheets."""
+    owner_id = get_workspace_owner_id(current_user)
+    account = _google_account(db, owner_id)
+    if not account:
+        return {"status": "success", "connected": False}
+
+    if not google_sheets.is_mock(account):
+        token = decrypt_token(account.refresh_token) or decrypt_token(account.access_token)
+        if token:
+            try:  # best effort: the connection is removed here even if Google can't be reached
+                httpx.post("https://oauth2.googleapis.com/revoke", params={"token": token}, timeout=10)
+            except Exception as e:
+                logger.warning("Google token revoke failed: %s", e)
+
+    db.query(SyncedData).filter(
+        SyncedData.user_id == owner_id,
+        SyncedData.connected_account_id == account.id,
+        SyncedData.source == "google_sheets"
+    ).delete(synchronize_session=False)
+    db.delete(account)
+    db.commit()
+    return {"status": "success", "connected": False}
 
 
 @router.get("/sheets")
 def list_sheets(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """List Google Sheets available in user's connected account."""
-    owner_id = get_workspace_owner_id(current_user)
-    account = db.query(ConnectedAccount).filter(
-        ConnectedAccount.user_id == owner_id,
-        ConnectedAccount.service == "google_sheets"
-    ).first()
-    
+    account = _google_account(db, get_workspace_owner_id(current_user))
     if not account:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Google Sheets is not connected"
-        )
-        
-    # If Mock Account
-    if account.access_token == "mock_access_token":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Google Sheets is not connected")
+
+    if google_sheets.is_mock(account):
         return [
-            {
-                "id": "mock_sheet_sales_1",
-                "name": "SAGE Coffee Shop - Sales & Transactions 2026",
-                "sheets": ["Sales", "Expenses", "Anomalies_Demo"]
-            },
-            {
-                "id": "mock_sheet_inventory_1",
-                "name": "Sage Inventory & Supply Chain",
-                "sheets": ["StockLevel", "Vendors"]
-            }
+            {"id": "mock_sheet_sales_1", "name": "SAGE Coffee Shop - Sales & Transactions 2026",
+             "sheets": ["Sales", "Expenses", "Anomalies_Demo"]},
+            {"id": "mock_sheet_inventory_1", "name": "Sage Inventory & Supply Chain",
+             "sheets": ["StockLevel", "Vendors"]}
         ]
-        
-    # Real Google API listing
-    try:
-        creds = refresh_account_token(account, db)
-        drive_service = build("drive", "v3", credentials=creds)
-        sheets_service = build("sheets", "v4", credentials=creds)
-        
-        # Search for spreadsheets in Google Drive
-        results = drive_service.files().list(
-            q="mimeType='application/vnd.google-apps.spreadsheet'",
-            pageSize=30,
-            fields="files(id, name)"
-        ).execute()
-        files = results.get("files", [])
-        
-        output = []
-        for f in files:
-            try:
-                # Fetch sheet names inside each spreadsheet
-                spreadsheet_metadata = sheets_service.spreadsheets().get(
-                    spreadsheetId=f["id"]
-                ).execute()
-                sheets = [s["properties"]["title"] for s in spreadsheet_metadata.get("sheets", [])]
-                output.append({
-                    "id": f["id"],
-                    "name": f["name"],
-                    "sheets": sheets
-                })
-            except Exception:
-                # If we cannot access a specific sheet file (permissions), skip it
-                continue
-        return output
-        
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve files from Google Drive: {str(e)}"
-        )
+
+    sheets = google_sheets.list_spreadsheets(account, db)
+    # Include a spreadsheet added by link earlier, even if Drive listing doesn't return it.
+    extra = (account.account_metadata or {}).get("extra_spreadsheets", [])
+    known = {s["id"] for s in sheets}
+    return sheets + [e for e in extra if e["id"] not in known]
+
+
+class SheetLookupRequest(BaseModel):
+    url: str
+
+
+@router.post("/sheets/lookup")
+def lookup_sheet(
+    payload: SheetLookupRequest,
+    current_user: User = Depends(require_writer),
+    db: Session = Depends(get_db)
+):
+    """Add a spreadsheet by pasting its link (works even without the Drive-listing permission)."""
+    account = _google_account(db, get_workspace_owner_id(current_user))
+    if not account:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Google Sheets is not connected")
+    if google_sheets.is_mock(account):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Connect a real Google account to add sheets by link.")
+
+    found = google_sheets.lookup_spreadsheet(account, db, payload.url)
+    meta = dict(account.account_metadata or {})
+    extra = [e for e in meta.get("extra_spreadsheets", []) if e["id"] != found["id"]] + [found]
+    meta["extra_spreadsheets"] = extra[-20:]
+    account.account_metadata = meta
+    db.commit()
+    return found
 
 
 @router.post("/sheets/sync")

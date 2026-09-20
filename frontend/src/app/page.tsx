@@ -2,6 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
+import { MarketingFooter, MarketingHeader } from "../components/marketing/MarketingChrome";
 import { 
   Sparkles, Database, ShieldAlert, ArrowRight, BarChart3, LineChart, Users, CheckCircle2, ChevronRight 
 } from "lucide-react";
@@ -18,38 +19,7 @@ export default function LandingPage() {
       {/* Grid Pattern */}
       <div className="absolute inset-0 bg-[linear-gradient(to_right,#8080800a_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:32px_32px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] pointer-events-none"></div>
 
-      {/* Top Navbar */}
-      <header className="border-b border-white/5 bg-[#08080c]/50 backdrop-blur-md sticky top-0 z-50">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-extrabold text-white tracking-tight bg-gradient-to-r from-white via-indigo-100 to-purple-100 bg-clip-text text-transparent glow-text-indigo">
-              SAGE
-            </h1>
-            <span className="text-[9px] bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider">v1.0</span>
-          </div>
-
-          <nav className="hidden md:flex items-center gap-8 text-xs font-semibold text-gray-400">
-            <a href="#features" className="hover:text-white transition-colors">Platform Features</a>
-            <a href="#privacy" className="hover:text-white transition-colors">Data Privacy Core</a>
-            <a href="#workflow" className="hover:text-white transition-colors">How It Works</a>
-          </nav>
-
-          <div className="flex items-center gap-4">
-            <Link 
-              href="/login" 
-              className="text-xs font-semibold text-gray-400 hover:text-white transition-colors"
-            >
-              Sign In
-            </Link>
-            <Link 
-              href="/register" 
-              className="px-4 py-2 text-xs font-bold bg-white text-black hover:bg-gray-200 rounded-lg transition-all shadow-md shadow-white/5"
-            >
-              Get Started
-            </Link>
-          </div>
-        </div>
-      </header>
+      <MarketingHeader />
 
       {/* Hero Section */}
       <section className="max-w-6xl mx-auto px-6 pt-20 pb-16 z-10 text-center space-y-8">
@@ -203,19 +173,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="border-t border-white/5 py-8 mt-16 bg-black/20 text-xs text-gray-500">
-        <div className="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row justify-between items-center gap-4">
-          <div>
-            <p className="font-bold text-gray-400">SAGE Platform &copy; 2026</p>
-            <p className="mt-0.5">Continuous business growth insights engine.</p>
-          </div>
-          <div className="flex gap-6">
-            <Link href="/login" className="hover:text-white transition-colors">Admin Login</Link>
-            <Link href="/register" className="hover:text-white transition-colors">Register Workspace</Link>
-          </div>
-        </div>
-      </footer>
+      <MarketingFooter />
 
     </div>
   );

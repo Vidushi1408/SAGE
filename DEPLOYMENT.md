@@ -74,6 +74,8 @@ Next.js 15 is optimized for deployment on Vercel.
 
 ## 3. Google Cloud Console Redirect Setup
 
+Full walkthrough (credentials, consent screen, going public): see [GOOGLE_SETUP.md](GOOGLE_SETUP.md).
+
 If using the live Google Sheets API:
 1. Open the [Google Cloud Console Credentials Screen](https://console.cloud.google.com/apis/credentials).
 2. Edit your active OAuth 2.0 Client ID.

@@ -12,7 +12,7 @@ from app.core.rate_limit import login_account_limiter, login_ip_limiter
 from app.models.user import User
 from app.schemas.user import (
     UserCreate, UserResponse, Token,
-    ForgotPasswordRequest, ResetPasswordRequest, UpdateMeRequest
+    ForgotPasswordRequest, ResetPasswordRequest, UpdateMeRequest, ChangePasswordRequest
 )
 from app.api.deps import get_current_user
 from app.services.email import EmailService
@@ -114,6 +114,27 @@ def update_me(
     db.commit()
     db.refresh(current_user)
     return current_user
+
+
+@router.post("/change-password")
+def change_password(
+    payload: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Change the signed-in user's password. Other sessions are revoked; a fresh token is returned for this one."""
+    if not verify_password(payload.current_password, current_user.hashed_password):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Your current password is incorrect.")
+    if payload.current_password == payload.new_password:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Choose a password different from your current one.")
+
+    current_user.hashed_password = hash_password(payload.new_password)
+    db.commit()
+    token = create_access_token(
+        subject=current_user.id,
+        pw_fingerprint=password_fingerprint(current_user.hashed_password),
+    )
+    return {"access_token": token, "token_type": "bearer"}
 
 
 @router.post("/forgot-password")
