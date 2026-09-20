@@ -65,6 +65,10 @@ def test_dispatch_alerts_posts_to_slack_webhook(client, db_session, monkeypatch)
     monkeypatch.setattr("app.services.slack.httpx.post", fake_post)
 
     headers = get_auth_headers(client)
+    # The shared demo user may already have been alerted about these anomalies by earlier runs.
+    from app.models.user import User
+    db_session.query(User).filter(User.email == "demo@sage.ai").update({"last_alerted_anomalies": []})
+    db_session.flush()
     client.post(
         "/api/v1/connectors/slack",
         headers=headers,

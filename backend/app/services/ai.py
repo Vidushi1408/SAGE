@@ -5,6 +5,7 @@ from typing import Dict, Any
 import anthropic
 
 from app.core.config import settings
+from app.services import ollama
 from app.core.prompts import SYSTEM_PROMPT, USER_PROMPT_TEMPLATE
 
 logger = logging.getLogger("sage.ai")
@@ -16,13 +17,17 @@ class AIService:
         Generate insights using Claude API.
         Falls back to Mock AI Engine if ANTHROPIC_API_KEY is not defined.
         """
-        if not settings.ANTHROPIC_API_KEY or settings.ANTHROPIC_API_KEY.strip() == "":
-            logger.info("No ANTHROPIC_API_KEY configured. Running Mock AI Engine...")
+        provider = settings.active_llm
+        if provider == "mock":
+            logger.info("No LLM configured. Running Mock AI Engine...")
             return cls._generate_mock_insights(computed_stats)
 
         user_prompt = USER_PROMPT_TEMPLATE.format(
             computed_stats=json.dumps(computed_stats, indent=2)
         )
+
+        if provider == "ollama":
+            return cls._generate_ollama_insights(computed_stats, user_prompt)
 
         try:
             client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
@@ -42,6 +47,41 @@ class AIService:
         except Exception as e:
             logger.error(f"Claude API failed: {str(e)}. Falling back to default payload.")
             return cls._get_fallback_insights(computed_stats, error_msg=str(e))
+
+    @classmethod
+    def _generate_ollama_insights(cls, computed_stats: Dict[str, Any], user_prompt: str) -> Dict[str, Any]:
+        """
+        Local-LLM insights. The model writes the wording; charts always come from our own computed
+        data, and malformed output falls back to the deterministic engine.
+        """
+        try:
+            message = ollama.chat(
+                [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": user_prompt}],
+                json_mode=True,
+            )
+            result = cls._clean_and_parse_json(message.get("content", ""))
+            if not cls._is_valid_payload(result):
+                raise ValueError("model returned an invalid insight payload")
+            deterministic = cls._generate_mock_insights(computed_stats)["insights"]
+            by_title = {i["title"]: i for i in deterministic}
+            for idx, insight in enumerate(result["insights"]):
+                ref = by_title.get(insight.get("title")) or (deterministic[idx] if idx < len(deterministic) else None)
+                insight["chart_type"] = ref["chart_type"] if ref else "none"
+                insight["chart_data"] = ref["chart_data"] if ref else []
+            return result
+        except Exception as e:
+            logger.error(f"Ollama insights failed: {e}. Using deterministic insights.")
+            return cls._generate_mock_insights(computed_stats)
+
+    @staticmethod
+    def _is_valid_payload(result: Any) -> bool:
+        return (
+            isinstance(result, dict)
+            and isinstance(result.get("recommendation"), str) and result["recommendation"].strip() != ""
+            and isinstance(result.get("insights"), list) and len(result["insights"]) > 0
+            and all(isinstance(i, dict) and isinstance(i.get("title"), str) and isinstance(i.get("explanation"), str)
+                    for i in result["insights"])
+        )
 
     @classmethod
     def _clean_and_parse_json(cls, raw_text: str) -> Dict[str, Any]:

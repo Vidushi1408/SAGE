@@ -124,4 +124,7 @@ class ChatTools:
         fn = dispatch.get(tool_name)
         if not fn:
             return {"error": f"Unknown tool: {tool_name}"}
-        return fn(**tool_input)
+        try:
+            return fn(**tool_input)
+        except TypeError as e:
+            return {"error": f"Invalid arguments for {tool_name}: {e}"}

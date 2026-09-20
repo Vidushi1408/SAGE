@@ -8,6 +8,7 @@ import anthropic
 
 from app.core.config import settings
 from app.core.prompts import CHAT_SYSTEM_PROMPT
+from app.services import ollama
 from app.services.chat_tools import ChatTools, TOOL_DEFINITIONS
 
 logger = logging.getLogger("sage.chat")
@@ -38,10 +39,13 @@ class ChatService:
         """
         tools = ChatTools(computed_stats)
 
-        if not settings.ANTHROPIC_API_KEY or settings.ANTHROPIC_API_KEY.strip() == "":
+        provider = settings.active_llm
+        if provider == "mock":
             return cls._mock_respond(tools, user_message)
 
         try:
+            if provider == "ollama":
+                return cls._ollama_respond(tools, user_message, history or [])
             return cls._agent_respond(tools, user_message, history or [])
         except Exception as e:
             logger.error(f"Chat agent failed: {str(e)}", exc_info=True)
@@ -105,6 +109,42 @@ class ChatService:
             "query_used": last_tool_name,
             "query_result": last_tool_result
         }
+
+    @classmethod
+    def _ollama_respond(cls, tools: ChatTools, user_message: str, history: List[Dict[str, str]]) -> Dict[str, Any]:
+        """
+        Local-LLM tool loop. The model may only answer from tool results; if it never calls a tool
+        (small models sometimes skip it) we use the deterministic router so the answer is always
+        grounded, and if Ollama is unreachable we fall back to the deterministic answer too.
+        """
+        try:
+            messages: List[Dict[str, Any]] = [{"role": "system", "content": CHAT_SYSTEM_PROMPT}]
+            messages += [{"role": h["role"], "content": h["content"]} for h in history[-6:]]
+            messages.append({"role": "user", "content": user_message})
+            tool_specs = ollama.to_ollama_tools(TOOL_DEFINITIONS)
+
+            last_name = last_result = None
+            for _ in range(MAX_TOOL_ITERATIONS):
+                reply = ollama.chat(messages, tools=tool_specs)
+                calls = reply.get("tool_calls") or []
+                if not calls:
+                    if last_name is None:
+                        return cls._mock_respond(tools, user_message)
+                    text = (reply.get("content") or "").strip()
+                    return {"content": text or "I don't have a clear answer for that yet.",
+                            "chart": cls._build_chart(last_name, last_result),
+                            "query_used": last_name, "query_result": last_result}
+                messages.append(reply)
+                for call in calls:
+                    fn = call.get("function", {})
+                    last_name = fn.get("name")
+                    args = fn.get("arguments") or {}
+                    last_result = tools.call(last_name, args if isinstance(args, dict) else {})
+                    messages.append({"role": "tool", "content": json.dumps(last_result, default=str)})
+            return cls._mock_respond(tools, user_message)
+        except Exception as e:
+            logger.error(f"Ollama chat failed, using deterministic answer: {e}")
+            return cls._mock_respond(tools, user_message)
 
     @classmethod
     def _build_chart(cls, tool_name: Optional[str], tool_result: Any) -> Optional[Dict[str, Any]]:

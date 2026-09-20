@@ -28,6 +28,18 @@ class Settings(BaseSettings):
     # AI (Claude API)
     ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
 
+    # Local LLM (Ollama). LLM_PROVIDER: "ollama" | "anthropic" | "mock" | "" (auto: anthropic if a key is set, else mock)
+    LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "").strip().lower()
+    OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "llama3.2:3b")
+    OLLAMA_TIMEOUT_SECONDS: float = float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "120"))
+
+    @property
+    def active_llm(self) -> str:
+        if self.LLM_PROVIDER in ("ollama", "anthropic", "mock"):
+            return self.LLM_PROVIDER
+        return "anthropic" if self.ANTHROPIC_API_KEY.strip() else "mock"
+
     # Scheduled Ingestion
     SYNC_INTERVAL_MINUTES: int = int(os.getenv("SYNC_INTERVAL_MINUTES", "30"))
 
