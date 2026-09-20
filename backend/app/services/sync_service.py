@@ -1,6 +1,7 @@
 import os
 import json
 import random
+import zlib
 import logging
 from uuid import UUID
 from datetime import datetime, timedelta
@@ -22,7 +23,7 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from google.auth.exceptions import RefreshError
 
-def generate_mock_business_data():
+def generate_mock_business_data(sheet_name: str = "Sales"):
     """
     Generate highly realistic mock business transactions.
     Contains: Sales over several months with seasonality, categories,
@@ -31,7 +32,11 @@ def generate_mock_business_data():
     data = []
     base_date = datetime.utcnow() - timedelta(days=90)
     
-    categories = ["Coffee", "Bakery", "Merchandise", "Beans", "Sandwiches"]
+    # Each worksheet gets its own (repeatable) dataset so mock mode behaves like a real multi-sheet file.
+    is_sales = sheet_name.strip().lower() == "sales"
+    rng = random.Random(zlib.crc32(sheet_name.encode()))
+    categories = (["Coffee", "Bakery", "Merchandise", "Beans", "Sandwiches"] if is_sales
+                  else ["Rent", "Supplies", "Utilities", "Payroll", "Marketing"])
     payment_methods = ["UPI", "Card", "Cash"]
     
     # Generate ~150 rows of transaction data over 90 days
@@ -42,19 +47,19 @@ def generate_mock_business_data():
         
         # Add simple weekly seasonality (more sales on weekends)
         is_weekend = tx_date.weekday() in (5, 6)
-        base_amt = 18.0 if is_weekend else 10.0
+        base_amt = (18.0 if is_weekend else 10.0) * (1 if is_sales else 3.5)
         
         # Generate amount
-        amount = base_amt * random.uniform(0.8, 1.5)
+        amount = base_amt * rng.uniform(0.8, 1.5)
         
         # Introduce a few obvious anomalies (e.g. huge sales outlier and a negative/refund outlier)
-        if i == 45:
+        if is_sales and i == 45:
             amount = 950.0  # Anomaly: Huge corporate order
-        elif i == 110:
+        elif is_sales and i == 110:
             amount = -150.0 # Anomaly: Refund outlier
             
-        category = random.choice(categories)
-        payment = random.choice(payment_methods)
+        category = rng.choice(categories)
+        payment = rng.choice(payment_methods)
         
         data.append({
             "Date": tx_date.strftime("%Y-%m-%d"),
@@ -62,8 +67,8 @@ def generate_mock_business_data():
             "Amount": round(amount, 2),
             "Category": category,
             "Payment Method": payment,
-            "Quantity": random.randint(1, 5),
-            "Customer Email": f"customer_{random.randint(1, 30)}@gmail.com"
+            "Quantity": rng.randint(1, 5),
+            "Customer Email": f"customer_{rng.randint(1, 30)}@gmail.com"
         })
         
     return data
@@ -88,7 +93,7 @@ def sync_account_sheets(db: Session, account: ConnectedAccount, spreadsheet_id: 
 
     if account.access_token == "mock_access_token":
         # Generate and insert mock data rows
-        mock_data = generate_mock_business_data()
+        mock_data = generate_mock_business_data(sheet_name)
         
         for idx, row in enumerate(mock_data):
             record = SyncedData(
