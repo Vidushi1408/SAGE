@@ -131,3 +131,11 @@ def test_upload_latin1_file_accepted(client):
 def test_upload_binary_file_named_csv_is_rejected_cleanly(client):
     res = _upload(client, "fake.csv", bytes(range(256)) * 10)
     assert res.status_code == 400
+
+
+def test_mock_worksheets_have_distinct_repeatable_data():
+    from app.services.sync_service import generate_mock_business_data as gen
+    sales, expenses = gen("Sales"), gen("Expenses")
+    assert {r["Category"] for r in sales}.isdisjoint({r["Category"] for r in expenses})
+    assert gen("Sales") == sales  # repeatable
+    assert any(r["Amount"] == 950.0 for r in sales) and not any(r["Amount"] == 950.0 for r in expenses)

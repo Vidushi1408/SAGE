@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import api, { ChatMessage } from "../lib/api";
+import api, { ChatMessage, errorMessage } from "../lib/api";
 import { MessageCircle, X, Send, Sparkles } from "lucide-react";
 import InsightChart from "./InsightChart";
 
@@ -40,8 +40,8 @@ export default function ChatPanel() {
     try {
       const reply = await api.sendChatMessage(text);
       setMessages((prev) => [...prev, reply]);
-    } catch (err: any) {
-      setError(err.message || "Failed to get a response.");
+    } catch (err) {
+      setError(errorMessage(err) || "Failed to get a response.");
     } finally {
       setSending(false);
     }

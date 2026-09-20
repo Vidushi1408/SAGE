@@ -37,3 +37,10 @@ def client(db_session):
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
+
+
+@pytest.fixture(autouse=True)
+def _default_to_mock_llm(monkeypatch):
+    """Tests must not depend on a developer's local .env (Ollama/Anthropic); individual tests opt in."""
+    monkeypatch.setattr(settings, "LLM_PROVIDER", "mock")
+    monkeypatch.setattr(settings, "ANTHROPIC_API_KEY", "")

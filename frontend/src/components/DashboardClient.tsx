@@ -2,10 +2,10 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import api, { InsightsPayload, User, Sheet, InsightHistoryEntry, SlackStatus } from "../lib/api";
+import api, { InsightsPayload, User, Sheet, InsightHistoryEntry, SlackStatus, ProfileData, errorMessage } from "../lib/api";
 import {
   TrendingUp, TrendingDown, RefreshCw, LogOut, Sparkles,
-  DollarSign, Activity, AlertTriangle, HelpCircle, ArrowUpRight,
+  DollarSign, Activity, AlertTriangle, HelpCircle, 
   BarChart3, Database, Users, Settings as SettingsIcon, UserPlus, Trash2, Shield, CheckCircle2,
   Hash, Upload, Bell, Clock
 } from "lucide-react";
@@ -19,7 +19,7 @@ export default function DashboardClient() {
 
   // Data States
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<any>(null);
+  const [profile, setProfile] = useState<ProfileData | null>(null);
   const [insights, setInsights] = useState<InsightsPayload | null>(null);
   const [sheetsList, setSheetsList] = useState<Sheet[]>([]);
   const [teamMembers, setTeamMembers] = useState<User[]>([]);
@@ -108,12 +108,12 @@ export default function DashboardClient() {
       try {
         const team = await api.listTeamMembers();
         setTeamMembers(team);
-      } catch (err) {
-        // Suppress team query error if user lacks permissions
+      } catch {
+        // Team list is admin-only; ignore the error for other roles.
       }
 
       setError("");
-    } catch (err: any) {
+    } catch {
       setError("Failed to initialize workspace data. Make sure backend is running.");
     } finally {
       setLoading(false);
@@ -136,8 +136,8 @@ export default function DashboardClient() {
       const record = await api.getInsightById(insightId);
       setInsights(record.insight_data);
       if (record.computed_stats) setProfile(record.computed_stats);
-    } catch (err: any) {
-      setError("Failed to load historical insight: " + err.message);
+    } catch (err) {
+      setError("Failed to load historical insight: " + errorMessage(err));
     }
   };
 
@@ -150,8 +150,8 @@ export default function DashboardClient() {
       const status = await api.getSlackStatus();
       setSlackStatus(status);
       setSlackWebhookInput("");
-    } catch (err: any) {
-      setSlackError(err.message || "Failed to connect Slack.");
+    } catch (err) {
+      setSlackError(errorMessage(err) || "Failed to connect Slack.");
     } finally {
       setSlackLoading(false);
     }
@@ -162,8 +162,8 @@ export default function DashboardClient() {
     try {
       await api.disconnectSlack();
       setSlackStatus({ connected: false });
-    } catch (err: any) {
-      setSlackError(err.message || "Failed to disconnect Slack.");
+    } catch (err) {
+      setSlackError(errorMessage(err) || "Failed to disconnect Slack.");
     } finally {
       setSlackLoading(false);
     }
@@ -188,11 +188,11 @@ export default function DashboardClient() {
       setRefreshing(true);
       await runAnalysis();
       setUploadSuccess(`Imported ${res.rows_synced} rows from ${file.name} and updated your analysis.`);
-    } catch (err: any) {
+    } catch (err) {
       setUploadError(
         imported > 0
-          ? `Imported ${imported} rows, but the analysis failed: ${friendlyPipelineError(err.message)}`
-          : err.message || "Failed to upload file."
+          ? `Imported ${imported} rows, but the analysis failed: ${friendlyPipelineError(errorMessage(err))}`
+          : errorMessage(err) || "Failed to upload file."
       );
     } finally {
       setRefreshing(false);
@@ -223,14 +223,15 @@ export default function DashboardClient() {
     setSettingsSaving(true);
     try {
       await api.updateMe({ alert_email_enabled: next });
-    } catch (err: any) {
+    } catch (err) {
       setAlertEmailEnabled(!next);
-      setError("Failed to update alert preferences: " + err.message);
+      setError("Failed to update alert preferences: " + errorMessage(err));
     } finally {
       setSettingsSaving(false);
     }
   };
 
+  /* eslint-disable react-hooks/exhaustive-deps, react-hooks/set-state-in-effect -- run once on mount */
   useEffect(() => {
     if (!api.isLoggedIn()) {
       router.push("/login");
@@ -238,6 +239,7 @@ export default function DashboardClient() {
     }
     loadData();
   }, []);
+  /* eslint-enable react-hooks/exhaustive-deps, react-hooks/set-state-in-effect */
 
   useEffect(() => {
     // Read the query string directly off window.location rather than
@@ -248,6 +250,7 @@ export default function DashboardClient() {
     const connected = params.get("connected");
     const invited = params.get("invited");
     if (!connected && !invited) return;
+    /* eslint-disable react-hooks/set-state-in-effect -- one-time toast triggered by the redirect query string */
 
     if (connected) {
       const isMock = params.get("mock") === "true";
@@ -258,6 +261,7 @@ export default function DashboardClient() {
       setToastMessage("Welcome to the workspace! Your invite has been accepted.");
     }
 
+    /* eslint-enable react-hooks/set-state-in-effect */
     // Strip the query params so a refresh doesn't re-show the toast.
     window.history.replaceState(null, "", "/dashboard");
   }, []);
@@ -296,8 +300,8 @@ export default function DashboardClient() {
       }
 
       await runAnalysis();
-    } catch (err: any) {
-      setError("Refresh failed: " + friendlyPipelineError(err.message));
+    } catch (err) {
+      setError("Refresh failed: " + friendlyPipelineError(errorMessage(err)));
     } finally {
       setRefreshing(false);
       setRefreshStep("");
@@ -308,8 +312,8 @@ export default function DashboardClient() {
     try {
       const res = await api.getGoogleLoginUrl();
       window.location.href = res.url;
-    } catch (err: any) {
-      setError("Failed to start Google connection: " + err.message);
+    } catch (err) {
+      setError("Failed to start Google connection: " + errorMessage(err));
     }
   };
 
@@ -335,8 +339,8 @@ export default function DashboardClient() {
       // Reload team list
       const team = await api.listTeamMembers();
       setTeamMembers(team);
-    } catch (err: any) {
-      setInviteError(err.message || "Invitation failed.");
+    } catch (err) {
+      setInviteError(errorMessage(err) || "Invitation failed.");
     } finally {
       setInviteLoading(false);
     }
@@ -347,8 +351,8 @@ export default function DashboardClient() {
     try {
       await api.resendInvite(memberId);
       setToastMessage(`A fresh invite link was sent to ${email}.`);
-    } catch (err: any) {
-      setError("Failed to resend invite: " + err.message);
+    } catch (err) {
+      setError("Failed to resend invite: " + errorMessage(err));
     }
   };
 
@@ -360,8 +364,8 @@ export default function DashboardClient() {
       // Reload team list
       const team = await api.listTeamMembers();
       setTeamMembers(team);
-    } catch (err: any) {
-      setError("Failed to delete team member: " + err.message);
+    } catch (err) {
+      setError("Failed to delete team member: " + errorMessage(err));
     }
   };
 
@@ -546,7 +550,7 @@ export default function DashboardClient() {
               {(profile?.data_quality?.warnings?.length ?? 0) > 0 && (
                 <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-200 text-xs space-y-1.5">
                   <p className="font-bold flex items-center gap-2"><AlertTriangle className="w-4 h-4" /> Some of your data may not be read correctly</p>
-                  {profile.data_quality.warnings.map((w: string, i: number) => <p key={i} className="text-amber-200/80">{w}</p>)}
+                  {profile?.data_quality?.warnings?.map((w: string, i: number) => <p key={i} className="text-amber-200/80">{w}</p>)}
                 </div>
               )}
 
@@ -632,7 +636,7 @@ export default function DashboardClient() {
                 </div>
               ) : (
                 <div className="glass-card p-8 text-center text-gray-500 text-xs">
-                  No insights generated yet. Click "Refresh Analysis" or sync spreadsheet.
+                  No insights generated yet. Click &quot;Refresh Analysis&quot; or sync spreadsheet.
                 </div>
               )}
 
@@ -661,7 +665,7 @@ export default function DashboardClient() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/5">
-                        {anomalies.map((anom: any, index: number) => (
+                        {anomalies.map((anom: { transaction_id: string; date: string; amount: number; reason: string; z_score: number }, index: number) => (
                           <tr key={index} className="hover:bg-white/2 transition-colors">
                             <td className="py-3 font-medium text-white">{anom.date}</td>
                             <td className="py-3 font-mono">{anom.transaction_id}</td>
@@ -769,7 +773,7 @@ export default function DashboardClient() {
                   </div>
                 ) : (
                   <div className="p-8 text-center text-gray-500 text-xs border border-dashed border-white/10 rounded-xl">
-                    No Google Spreadsheets connected. Please click "Reconnect Google Account" to configure.
+                    No Google Spreadsheets connected. Please click &quot;Reconnect Google Account&quot; to configure.
                   </div>
                 )}
               </div>

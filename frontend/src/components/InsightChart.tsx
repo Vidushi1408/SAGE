@@ -9,7 +9,7 @@ import { InsightObject } from "../lib/api";
 
 const COLORS = ["#6366f1", "#8b5cf6", "#d946ef", "#ec4899", "#f43f5e", "#10b981"];
 
-const CustomTooltip = ({ active, payload }: any) => {
+const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: { value: number; name: string }[] }) => {
   if (active && payload && payload.length) {
     return (
       <div className="bg-[#101015]/95 backdrop-blur-md border border-white/10 px-3 py-2 rounded-lg text-xs shadow-2xl">

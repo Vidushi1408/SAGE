@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import api, { Sheet } from "../../lib/api";
+import api, { Sheet, errorMessage } from "../../lib/api";
 import { Database, Upload, RefreshCw, CheckCircle, BarChart3, AlertCircle, LogOut } from "lucide-react";
 
 export default function Onboarding() {
@@ -16,7 +16,6 @@ export default function Onboarding() {
 
   // Sync Pipeline steps
   const [syncStep, setSyncStep] = useState<"idle" | "pulling" | "profiling" | "generating" | "completed">("idle");
-  const [syncRows, setSyncRows] = useState(0);
 
   const checkConnectionStatus = async () => {
     setSheetsLoading(true);
@@ -30,13 +29,14 @@ export default function Onboarding() {
           setSelectedSheetName(sheets[0].sheets[0]);
         }
       }
-    } catch (err) {
+    } catch {
       setIsConnected(false);
     } finally {
       setSheetsLoading(false);
     }
   };
 
+  /* eslint-disable react-hooks/exhaustive-deps, react-hooks/set-state-in-effect -- run once on mount */
   useEffect(() => {
     if (!api.isLoggedIn()) {
       router.push("/login");
@@ -44,13 +44,14 @@ export default function Onboarding() {
     }
     checkConnectionStatus();
   }, []);
+  /* eslint-enable react-hooks/exhaustive-deps, react-hooks/set-state-in-effect */
 
   const handleGoogleConnect = async () => {
     try {
       const res = await api.getGoogleLoginUrl();
       window.location.href = res.url;
-    } catch (err: any) {
-      setError("Failed to start Google connection: " + err.message);
+    } catch (err) {
+      setError("Failed to start Google connection: " + errorMessage(err));
     }
   };
 
@@ -65,8 +66,7 @@ export default function Onboarding() {
 
     try {
       // Step 1: Pull/Sync Data rows
-      const syncRes = await api.syncSheet(selectedSheetId, selectedSheetName);
-      setSyncRows(syncRes.rows_synced);
+      await api.syncSheet(selectedSheetId, selectedSheetName);
       
       // Step 2: Statistical Profiling
       setSyncStep("profiling");
@@ -81,9 +81,9 @@ export default function Onboarding() {
         router.push("/dashboard");
       }, 1000);
 
-    } catch (err: any) {
+    } catch (err) {
       setSyncStep("idle");
-      setError("Analysis pipeline failed: " + err.message);
+      setError("Analysis pipeline failed: " + errorMessage(err));
     }
   };
 
@@ -102,9 +102,9 @@ export default function Onboarding() {
       await api.generateInsights();
       setSyncStep("completed");
       setTimeout(() => router.push("/dashboard"), 1000);
-    } catch (err: any) {
+    } catch (err) {
       setSyncStep("idle");
-      setError("Could not process that file: " + err.message);
+      setError("Could not process that file: " + errorMessage(err));
     }
   };
 

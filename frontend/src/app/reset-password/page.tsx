@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import api from "../../lib/api";
+import api, { errorMessage } from "../../lib/api";
 import { RefreshCw, AlertCircle, ArrowLeft, CheckCircle2 } from "lucide-react";
 
 export default function ResetPassword() {
@@ -12,6 +12,7 @@ export default function ResetPassword() {
   // useSearchParams(), which needs a Suspense boundary for a value we only need once.
   const [token, setToken] = useState("");
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time read of the browser URL on mount
     setToken(new URLSearchParams(window.location.search).get("token") || "");
   }, []);
 
@@ -39,8 +40,8 @@ export default function ResetPassword() {
       await api.resetPassword(token, password);
       setDone(true);
       setTimeout(() => router.push("/login"), 1500);
-    } catch (err: any) {
-      setError(err.message || "This reset link is invalid or has expired.");
+    } catch (err) {
+      setError(errorMessage(err) || "This reset link is invalid or has expired.");
     } finally {
       setLoading(false);
     }

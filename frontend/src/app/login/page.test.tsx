@@ -9,6 +9,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("../../lib/api", () => ({
+  errorMessage: (e: unknown) => (e instanceof Error ? e.message : String(e ?? "")),
   default: {
     login: vi.fn().mockResolvedValue({ access_token: "tok" }),
     listSheets: vi.fn().mockResolvedValue([]),

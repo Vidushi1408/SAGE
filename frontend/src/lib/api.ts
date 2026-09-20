@@ -116,6 +116,7 @@ class ApiClient {
     if (response.status !== 401 || !hadToken) return;
     this.clearToken();
     if (typeof window !== "undefined" && window.location.pathname !== "/login") {
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- hard redirect resets all client state
       window.location.href = "/login";
     }
   }
@@ -241,12 +242,12 @@ class ApiClient {
 
   // --- Profiling ---
 
-  public async triggerProfiling(): Promise<any> {
-    return this.request<any>("/api/v1/data/profile", { method: "POST" });
+  public async triggerProfiling(): Promise<ProfileData> {
+    return this.request<ProfileData>("/api/v1/data/profile", { method: "POST" });
   }
 
-  public async getLatestProfile(): Promise<any> {
-    return this.request<any>("/api/v1/data/profile/latest");
+  public async getLatestProfile(): Promise<ProfileData> {
+    return this.request<ProfileData>("/api/v1/data/profile/latest");
   }
 
   // --- Insights ---
@@ -263,7 +264,7 @@ class ApiClient {
     return this.request<InsightHistoryEntry[]>(`/api/v1/insights/history?limit=${limit}`);
   }
 
-  public async getInsightById(id: string): Promise<{ id: string; created_at: string; insight_data: InsightsPayload; computed_stats: any }> {
+  public async getInsightById(id: string): Promise<{ id: string; created_at: string; insight_data: InsightsPayload; computed_stats: ProfileData }> {
     return this.request(`/api/v1/insights/${id}`);
   }
 
@@ -295,8 +296,8 @@ class ApiClient {
     return this.request<User>(`/api/v1/team/${memberId}/resend-invite`, { method: "POST" });
   }
 
-  public async deleteTeamMember(memberId: string): Promise<any> {
-    return this.request<any>(`/api/v1/team/${memberId}`, {
+  public async deleteTeamMember(memberId: string): Promise<{ message?: string }> {
+    return this.request<{ message?: string }>(`/api/v1/team/${memberId}`, {
       method: "DELETE"
     });
   }
@@ -318,3 +319,12 @@ class ApiClient {
 
 export const api = new ApiClient();
 export default api;
+
+/** Computed-stats payload from the profiler; its shape evolves server-side, so it stays loosely typed. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type ProfileData = Record<string, any>;
+
+/** Best-effort message from anything thrown in a catch block. */
+export function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err ?? "");
+}

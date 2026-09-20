@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import api from "../../lib/api";
+import api, { errorMessage } from "../../lib/api";
 import { RefreshCw, AlertCircle, ArrowLeft } from "lucide-react";
 
 export default function AcceptInvite() {
@@ -10,6 +10,7 @@ export default function AcceptInvite() {
   // useSearchParams(), which needs a Suspense boundary for a value we only need once.
   const [token, setToken] = useState("");
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time read of the browser URL on mount
     setToken(new URLSearchParams(window.location.search).get("token") || "");
   }, []);
 
@@ -32,9 +33,11 @@ export default function AcceptInvite() {
       const member = await api.acceptInvite(token, name, password);
       // acceptInvite doesn't issue a session token, so log in immediately after with the new password
       await api.login(member.email, password);
+      // Full navigation so the dashboard mounts fresh with the new session.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       window.location.href = "/dashboard?invited=true";
-    } catch (err: any) {
-      setError(err.message || "This invite link is invalid or has expired.");
+    } catch (err) {
+      setError(errorMessage(err) || "This invite link is invalid or has expired.");
     } finally {
       setLoading(false);
     }

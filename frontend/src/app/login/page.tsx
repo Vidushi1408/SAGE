@@ -3,8 +3,8 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import api from "../../lib/api";
-import { Sparkles, RefreshCw, AlertCircle, ArrowLeft, ShieldCheck } from "lucide-react";
+import api, { errorMessage } from "../../lib/api";
+import { Sparkles, RefreshCw, AlertCircle, ArrowLeft } from "lucide-react";
 
 export default function Login() {
   const router = useRouter();
@@ -29,8 +29,8 @@ export default function Login() {
     try {
       await api.login(email, password);
       await checkRedirection();
-    } catch (err: any) {
-      setError(err.message || "Invalid email or password");
+    } catch (err) {
+      setError(errorMessage(err) || "Invalid email or password");
     } finally {
       setLoading(false);
     }
@@ -42,8 +42,8 @@ export default function Login() {
     try {
       await api.login("demo@sage.ai", "sage_demo_pass");
       await checkRedirection();
-    } catch (err: any) {
-      setError(err.message || "Demo login failed");
+    } catch (err) {
+      setError(errorMessage(err) || "Demo login failed");
     } finally {
       setLoading(false);
     }
@@ -132,7 +132,7 @@ export default function Login() {
         </div>
 
         <div className="text-center text-xs text-gray-500">
-          <span>Don't have an account? </span>
+          <span>Don&apos;t have an account? </span>
           <Link href="/register" className="text-indigo-400 hover:underline font-bold transition-all">Sign Up</Link>
         </div>
       </div>

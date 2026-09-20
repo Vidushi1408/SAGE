@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import api from "../../lib/api";
+import api, { errorMessage } from "../../lib/api";
 import { RefreshCw, AlertCircle, ArrowLeft, MailCheck } from "lucide-react";
 
 export default function ForgotPassword() {
@@ -18,8 +18,8 @@ export default function ForgotPassword() {
     try {
       await api.forgotPassword(email);
       setSent(true);
-    } catch (err: any) {
-      setError(err.message || "Something went wrong. Please try again.");
+    } catch (err) {
+      setError(errorMessage(err) || "Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }

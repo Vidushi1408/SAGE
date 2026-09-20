@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import api from "../../lib/api";
+import api, { errorMessage } from "../../lib/api";
 import { RefreshCw, AlertCircle, ArrowLeft, ShieldCheck } from "lucide-react";
 
 export default function Register() {
@@ -24,8 +24,8 @@ export default function Register() {
       await api.login(email, password);
       // 3. Navigate to onboarding sheet setup
       router.push("/onboarding");
-    } catch (err: any) {
-      setError(err.message || "Registration failed. Try a different email.");
+    } catch (err) {
+      setError(errorMessage(err) || "Registration failed. Try a different email.");
     } finally {
       setLoading(false);
     }
