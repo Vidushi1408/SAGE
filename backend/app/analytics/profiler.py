@@ -29,7 +29,10 @@ def run_profiling(records: List[SyncedData]) -> Dict[str, Any]:
         return {
             "summary": {"total_revenue": 0, "total_transactions": 0, "avg_transaction_value": 0},
             "period_metrics": {"daily": [], "monthly": [], "weekly": []},
-            "category_metrics": {"top_categories": [], "bottom_categories": []},
+            "category_metrics": {"top_categories": [], "bottom_categories": [], "all_categories": []},
+            "payment_breakdown": [],
+            "quantity_breakdown": [],
+            "amount_distribution": [],
             "anomalies": [],
             "correlations": {},
             "data_quality": {"rows_total": 0, "rows_used": 0, "mapped_columns": {}, "warnings": []}
@@ -92,7 +95,10 @@ def run_profiling(records: List[SyncedData]) -> Dict[str, Any]:
         return {
             "summary": {"total_revenue": 0, "total_transactions": 0, "avg_transaction_value": 0},
             "period_metrics": {"daily": [], "monthly": [], "weekly": []},
-            "category_metrics": {"top_categories": [], "bottom_categories": []},
+            "category_metrics": {"top_categories": [], "bottom_categories": [], "all_categories": []},
+            "payment_breakdown": [],
+            "quantity_breakdown": [],
+            "amount_distribution": [],
             "anomalies": [],
             "correlations": {},
             "data_quality": data_quality
@@ -179,7 +185,8 @@ def run_profiling(records: List[SyncedData]) -> Dict[str, Any]:
     # 5. Category Analysis
     top_categories = []
     bottom_categories = []
-    
+    all_categories = []
+
     if "Category" in df.columns:
         cat_grp = df.groupby("Category").agg(
             revenue=("Amount", "sum"),
@@ -206,6 +213,61 @@ def run_profiling(records: List[SyncedData]) -> Dict[str, Any]:
             
         top_categories = categories_cleaned[:3]
         bottom_categories = categories_cleaned[-3:] if len(categories_cleaned) > 3 else categories_cleaned
+        all_categories = categories_cleaned
+
+    # 5b. Payment method breakdown (only present when the source data has a recognisable column)
+    payment_breakdown = []
+    if "Payment Method" in df.columns:
+        pay_grp = df.groupby("Payment Method").agg(
+            revenue=("Amount", "sum"),
+            volume=("Amount", "count")
+        ).reset_index()
+        total_pay_rev = pay_grp["revenue"].sum()
+        pay_grp["share_pct"] = (pay_grp["revenue"] / total_pay_rev * 100) if total_pay_rev > 0 else 0.0
+        pay_grp = pay_grp.sort_values(by="revenue", ascending=False).reset_index(drop=True)
+        for _, row in pay_grp.iterrows():
+            payment_breakdown.append({
+                "method": str(row["Payment Method"]),
+                "revenue": round(float(row["revenue"]), 2),
+                "volume": int(row["volume"]),
+                "share_pct": round(float(row["share_pct"]), 2)
+            })
+
+    # 5c. Revenue by quantity-per-order (full dataset, not a capped sample)
+    quantity_breakdown = []
+    if "Quantity" in df.columns:
+        qty_grp = df.groupby("Quantity").agg(
+            avg_amount=("Amount", "mean"),
+            count=("Amount", "count")
+        ).reset_index().sort_values(by="Quantity")
+        for _, row in qty_grp.iterrows():
+            quantity_breakdown.append({
+                "quantity": clean_val(row["Quantity"]),
+                "avg_amount": round(float(row["avg_amount"]), 2),
+                "count": int(row["count"])
+            })
+
+    # 5d. Transaction amount distribution (histogram over the full dataset; refunds bucketed separately)
+    amount_distribution = []
+    positive_amounts = df.loc[df["Amount"] > 0, "Amount"]
+    refund_count = int((df["Amount"] < 0).sum())
+    if not positive_amounts.empty:
+        max_amt = float(positive_amounts.max())
+        bin_count = min(8, max(1, positive_amounts.nunique()))
+        try:
+            counts, edges = np.histogram(positive_amounts, bins=bin_count)
+            for i in range(len(counts)):
+                if counts[i] == 0:
+                    continue
+                lo, hi = edges[i], edges[i + 1]
+                amount_distribution.append({
+                    "range": f"${lo:,.0f}-{hi:,.0f}",
+                    "count": int(counts[i])
+                })
+        except ValueError:
+            pass
+    if refund_count:
+        amount_distribution.append({"range": "Refunds (<$0)", "count": refund_count})
 
     # 6. Anomaly Detection (Z-score, IQR & negative values)
     anomalies = []
@@ -265,8 +327,12 @@ def run_profiling(records: List[SyncedData]) -> Dict[str, Any]:
         },
         "category_metrics": {
             "top_categories": top_categories,
-            "bottom_categories": bottom_categories
+            "bottom_categories": bottom_categories,
+            "all_categories": all_categories
         },
+        "payment_breakdown": payment_breakdown,
+        "quantity_breakdown": quantity_breakdown,
+        "amount_distribution": amount_distribution,
         "anomalies": anomalies,
         "correlations": correlations,
         "data_quality": data_quality

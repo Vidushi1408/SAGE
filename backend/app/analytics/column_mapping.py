@@ -21,6 +21,10 @@ COLUMN_SYNONYMS: Dict[str, List[str]] = {
     "Quantity": [
         "quantity", "qty", "count", "units", "units sold", "items sold", "unit sold",
     ],
+    "Payment Method": [
+        "payment method", "payment type", "payment", "channel", "payment channel",
+        "mode of payment", "pay method",
+    ],
 }
 
 

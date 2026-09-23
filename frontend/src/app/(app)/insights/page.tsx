@@ -4,6 +4,7 @@ import React, { useMemo, useState } from "react";
 import { AlertTriangle, Clock, Download, Lightbulb, Search, Sparkles } from "lucide-react";
 import { useWorkspace } from "../../../components/workspace/WorkspaceProvider";
 import InsightChart from "../../../components/InsightChart";
+import AnalyticsCharts from "../../../components/AnalyticsCharts";
 import { EmptyState, PageHeader, formatDateTime, formatMoney, inputClass, secondaryButton, timeAgo } from "../../../components/ui";
 
 type Anomaly = { transaction_id: string; date: string; amount: number; reason: string; z_score: number };
@@ -68,10 +69,10 @@ export default function InsightsPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-[18rem_1fr] gap-6 items-start">
         <aside className="glass-card p-4 space-y-2 lg:sticky lg:top-20">
-          <h2 className="text-xs font-bold text-white flex items-center gap-2 px-2 pb-2"><Clock className="w-3.5 h-3.5 text-gray-500" /> Analysis history</h2>
+          <h2 className="text-xs font-bold text-[#3d3335] flex items-center gap-2 px-2 pb-2"><Clock className="w-3.5 h-3.5 text-[#8a7d78]" /> Analysis history</h2>
           <button
             onClick={() => selectInsight("latest")}
-            className={`w-full text-left px-3 py-2.5 rounded-lg text-xs transition-all border ${selectedInsightId === "latest" ? "bg-indigo-500/10 border-indigo-500/20 text-indigo-200" : "border-transparent text-gray-400 hover:bg-white/5"}`}
+            className={`w-full text-left px-3 py-2.5 rounded-lg text-xs transition-all border ${selectedInsightId === "latest" ? "bg-[#f2e9dc] border-[#ddc2a0] text-[#7f5631]" : "border-transparent text-[#8a7d78] hover:bg-[#efe8d8]"}`}
           >
             <span className="font-semibold">Latest</span>
           </button>
@@ -80,22 +81,22 @@ export default function InsightsPage() {
               <button
                 key={h.id}
                 onClick={() => selectInsight(h.id)}
-                className={`w-full text-left px-3 py-2.5 rounded-lg text-xs transition-all border ${selectedInsightId === h.id ? "bg-indigo-500/10 border-indigo-500/20" : "border-transparent hover:bg-white/5"}`}
+                className={`w-full text-left px-3 py-2.5 rounded-lg text-xs transition-all border ${selectedInsightId === h.id ? "bg-[#f2e9dc] border-[#ddc2a0]" : "border-transparent hover:bg-[#efe8d8]"}`}
               >
-                <span className="block font-semibold text-gray-200">{timeAgo(h.created_at)}</span>
-                <span className="block text-[10px] text-gray-500">{formatDateTime(h.created_at)}</span>
-                {h.recommendation && <span className="block text-[11px] text-gray-500 mt-1 line-clamp-2">{h.recommendation}</span>}
+                <span className="block font-semibold text-[#5c5052]">{timeAgo(h.created_at)}</span>
+                <span className="block text-[10px] text-[#8a7d78]">{formatDateTime(h.created_at)}</span>
+                {h.recommendation && <span className="block text-[11px] text-[#8a7d78] mt-1 line-clamp-2">{h.recommendation}</span>}
               </button>
             ))}
-            {insightHistory.length === 0 && <p className="text-[11px] text-gray-600 px-3 py-2">Snapshots will appear after your first analysis.</p>}
+            {insightHistory.length === 0 && <p className="text-[11px] text-[#6d6062] px-3 py-2">Snapshots will appear after your first analysis.</p>}
           </div>
         </aside>
 
         <div className="space-y-8 min-w-0">
           {insights?.recommendation && (
-            <div className="p-5 rounded-2xl bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-pink-500/10 border border-indigo-500/20 flex gap-3 items-start">
-              <Sparkles className="w-5 h-5 text-violet-400 shrink-0 mt-0.5" />
-              <p className="text-gray-300 text-xs leading-relaxed font-medium">{insights.recommendation}</p>
+            <div className="p-5 rounded-2xl bg-[#f2e9dc] border border-[#ead9c2] flex gap-3 items-start">
+              <Sparkles className="w-5 h-5 text-[#9c6b3f] shrink-0 mt-0.5" />
+              <p className="text-[#6d6062] text-xs leading-relaxed font-medium">{insights.recommendation}</p>
             </div>
           )}
 
@@ -103,23 +104,25 @@ export default function InsightsPage() {
             {insights?.insights?.map((insight, idx) => (
               <div key={idx} className="glass-card p-6 flex flex-col gap-4">
                 <div className="space-y-1">
-                  <h3 className="font-extrabold text-white text-sm">{insight.title}</h3>
-                  <p className="text-xs text-gray-400 leading-relaxed">{insight.explanation}</p>
+                  <h3 className="font-bold text-[#3d3335] text-sm">{insight.title}</h3>
+                  <p className="text-xs text-[#8a7d78] leading-relaxed">{insight.explanation}</p>
                 </div>
                 <InsightChart insight={insight} idx={idx} />
               </div>
             ))}
           </div>
 
+          <AnalyticsCharts profile={profile} />
+
           <section className="glass-card p-6" aria-labelledby="anomalies-heading">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 border-b border-white/5 pb-3">
-              <h2 id="anomalies-heading" className="font-extrabold text-white text-sm flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-rose-400" /> Outliers &amp; anomalies
-                <span className="text-[10px] font-bold bg-rose-500/10 border border-rose-500/20 text-rose-400 px-2 py-0.5 rounded-full">{anomalies.length}</span>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 border-b border-[#efe8d8] pb-3">
+              <h2 id="anomalies-heading" className="font-bold text-[#3d3335] text-sm flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-rose-600" /> Outliers &amp; anomalies
+                <span className="text-[10px] font-bold bg-rose-500/10 border border-rose-500/20 text-rose-600 px-2 py-0.5 rounded-full">{anomalies.length}</span>
               </h2>
               <div className="flex gap-2">
                 <div className="relative">
-                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#8a7d78]" />
                   <input aria-label="Search anomalies" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search" className={`${inputClass} pl-9 !py-2 w-40`} />
                 </div>
                 <select aria-label="Sort anomalies" value={sortBy} onChange={e => setSortBy(e.target.value as "amount" | "date")} className={`${inputClass} !py-2 w-auto`}>
@@ -131,28 +134,28 @@ export default function InsightsPage() {
 
             {visible.length > 0 ? (
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs text-gray-400">
+                <table className="w-full text-left text-xs text-[#8a7d78]">
                   <thead>
-                    <tr className="border-b border-white/5 text-gray-500 font-semibold">
+                    <tr className="border-b border-[#efe8d8] text-[#8a7d78] font-semibold">
                       <th className="py-2.5">Date</th><th className="py-2.5">Transaction</th><th className="py-2.5">Amount</th>
                       <th className="py-2.5">Z-score</th><th className="py-2.5 text-right">Reason</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-white/5">
+                  <tbody className="divide-y divide-[#efe8d8]">
                     {visible.map((a, i) => (
-                      <tr key={i} className="hover:bg-white/[0.02]">
-                        <td className="py-3 font-medium text-white">{a.date}</td>
+                      <tr key={i} className="hover:bg-[#f6f1e7]">
+                        <td className="py-3 font-medium text-[#3d3335]">{a.date}</td>
                         <td className="py-3 font-mono">{a.transaction_id}</td>
-                        <td className={`py-3 font-bold ${a.amount < 0 ? "text-rose-400" : "text-amber-400"}`}>{formatMoney(a.amount)}</td>
+                        <td className={`py-3 font-bold ${a.amount < 0 ? "text-rose-600" : "text-amber-600"}`}>{formatMoney(a.amount)}</td>
                         <td className="py-3">{a.z_score !== 0 ? a.z_score.toFixed(2) : "n/a"}</td>
-                        <td className="py-3 text-right text-gray-300">{a.reason}</td>
+                        <td className="py-3 text-right text-[#6d6062]">{a.reason}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             ) : (
-              <p className="text-xs text-gray-500 py-6 text-center">{anomalies.length ? "No anomalies match your search." : "No anomalies found. Operations are within tolerance."}</p>
+              <p className="text-xs text-[#8a7d78] py-6 text-center">{anomalies.length ? "No anomalies match your search." : "No anomalies found. Operations are within tolerance."}</p>
             )}
           </section>
         </div>

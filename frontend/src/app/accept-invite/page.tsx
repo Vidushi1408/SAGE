@@ -44,35 +44,33 @@ export default function AcceptInvite() {
   };
 
   return (
-    <main className="min-h-screen bg-[#08080c] flex flex-col justify-center items-center px-4 py-12 relative overflow-hidden">
-      <div className="absolute top-1/4 left-1/4 w-[400px] h-[400px] bg-indigo-500/5 rounded-full blur-[120px] pointer-events-none"></div>
-      <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-purple-500/5 rounded-full blur-[120px] pointer-events-none"></div>
+    <main className="min-h-screen bg-[#f6f1e7] flex flex-col justify-center items-center px-4 py-12 relative overflow-hidden">
 
       <div className="w-full max-w-md space-y-6 z-10">
         <Link
           href="/"
-          className="inline-flex items-center gap-2 text-xs font-semibold text-gray-500 hover:text-white transition-colors"
+          className="inline-flex items-center gap-2 text-xs font-semibold text-[#8a7d78] hover:text-[#3d3335] transition-colors"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           <span>Back to Home</span>
         </Link>
 
         {error && (
-          <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-200 text-sm flex gap-3 items-start">
-            <AlertCircle className="w-5 h-5 shrink-0 text-red-400" />
+          <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm flex gap-3 items-start">
+            <AlertCircle className="w-5 h-5 shrink-0 text-red-500" />
             <span>{error}</span>
           </div>
         )}
 
-        <div className="glass-card p-8 shadow-2xl relative">
+        <div className="glass-card p-8 shadow-lg relative">
           <div className="text-center mb-6">
-            <h2 className="text-2xl font-extrabold text-white tracking-tight">Accept Your Invite</h2>
-            <p className="text-xs text-gray-500 mt-1.5 font-medium">Set your name and password to join the workspace</p>
+            <h2 className="text-2xl font-bold text-[#3d3335] tracking-tight">Accept Your Invite</h2>
+            <p className="text-xs text-[#8a7d78] mt-1.5 font-medium">Set your name and password to join the workspace</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label htmlFor="field-your-name" className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Your Name</label>
+              <label htmlFor="field-your-name" className="block text-[10px] font-bold text-[#8a7d78] uppercase tracking-widest mb-1.5">Your Name</label>
               <input id="field-your-name" 
                 type="text"
                 autoComplete="name"
@@ -80,26 +78,26 @@ export default function AcceptInvite() {
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Jane Analyst"
                 required
-                className="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 transition-all text-xs"
+                className="w-full px-4 py-3 rounded-lg bg-white border border-[#e6ddc9] text-[#3d3335] placeholder-[#a89b93] focus:outline-none focus:border-[#b9855a] transition-all text-xs"
               />
             </div>
 
             <div>
-              <label htmlFor="field-create-password" className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Create Password</label>
+              <label htmlFor="field-create-password" className="block text-[10px] font-bold text-[#8a7d78] uppercase tracking-widest mb-1.5">Create Password</label>
               <input id="field-create-password" 
                 type="password" minLength={8} autoComplete="new-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 required
-                className="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 transition-all text-xs"
+                className="w-full px-4 py-3 rounded-lg bg-white border border-[#e6ddc9] text-[#3d3335] placeholder-[#a89b93] focus:outline-none focus:border-[#b9855a] transition-all text-xs"
               />
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-semibold transition-all shadow-lg shadow-indigo-500/25 flex justify-center items-center gap-2 text-xs"
+              className="w-full py-3 rounded-lg bg-[#9c6b3f] hover:bg-[#7f5631] text-white font-semibold transition-all shadow-sm flex justify-center items-center gap-2 text-xs"
             >
               {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : "Accept Invite & Sign In"}
             </button>

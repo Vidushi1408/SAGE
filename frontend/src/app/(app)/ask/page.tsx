@@ -56,15 +56,15 @@ export default function AskPage() {
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 space-y-4">
           {messages.length === 0 && (
             <div className="h-full flex flex-col items-center justify-center text-center gap-4">
-              <div className="p-3 rounded-xl bg-violet-500/10 border border-violet-500/20 text-violet-400"><Sparkles className="w-6 h-6" /></div>
+              <div className="p-3 rounded-xl bg-[#9c8480]/10 border border-[#9c8480]/20 text-[#9c6b3f]"><Sparkles className="w-6 h-6" /></div>
               <div>
-                <h2 className="text-sm font-bold text-white">What would you like to know?</h2>
-                <p className="text-xs text-gray-500 mt-1">{hasData ? "Try one of these to get started." : "Add your data first so SAGE has something to answer from."}</p>
+                <h2 className="text-sm font-bold text-[#3d3335]">What would you like to know?</h2>
+                <p className="text-xs text-[#8a7d78] mt-1">{hasData ? "Try one of these to get started." : "Add your data first so SAGE has something to answer from."}</p>
               </div>
               {hasData && (
                 <div className="flex flex-wrap justify-center gap-2 max-w-xl">
                   {SUGGESTIONS.map(s => (
-                    <button key={s} onClick={() => send(s)} className="px-3 py-2 rounded-full border border-white/10 bg-white/5 hover:bg-indigo-500/10 hover:border-indigo-500/30 text-xs text-gray-300 transition-all">{s}</button>
+                    <button key={s} onClick={() => send(s)} className="px-3 py-2 rounded-full border border-[#e6ddc9] bg-[#efe8d8] hover:bg-[#f2e9dc] hover:border-[#cca87c] text-xs text-[#6d6062] transition-all">{s}</button>
                   ))}
                 </div>
               )}
@@ -73,25 +73,25 @@ export default function AskPage() {
 
           {messages.map((m, idx) => (
             <div key={idx} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-              <div className={`max-w-[85%] sm:max-w-[70%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${m.role === "user" ? "bg-indigo-500/20 border border-indigo-500/20 text-white" : "bg-white/5 border border-white/10 text-gray-200"}`}>
+              <div className={`max-w-[85%] sm:max-w-[70%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${m.role === "user" ? "bg-[#9c6b3f] text-white" : "bg-[#efe8d8] border border-[#e6ddc9] text-[#5c5052]"}`}>
                 <p className="whitespace-pre-wrap">{m.content}</p>
                 {m.chart && <div className="mt-3 -mx-1"><InsightChart insight={m.chart} idx={idx} /></div>}
               </div>
             </div>
           ))}
-          {sending && <div className="flex justify-start"><div className="bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-xs text-gray-400 animate-pulse">Thinking...</div></div>}
+          {sending && <div className="flex justify-start"><div className="bg-[#efe8d8] border border-[#e6ddc9] rounded-2xl px-4 py-3 text-xs text-[#8a7d78] animate-pulse">Thinking...</div></div>}
         </div>
 
-        {error && <div role="alert" className="px-6 pb-2 text-xs text-rose-400">{error}</div>}
+        {error && <div role="alert" className="px-6 pb-2 text-xs text-rose-600">{error}</div>}
 
-        <form onSubmit={e => { e.preventDefault(); send(input); }} className="p-4 border-t border-white/5 flex items-center gap-3">
+        <form onSubmit={e => { e.preventDefault(); send(input); }} className="p-4 border-t border-[#efe8d8] flex items-center gap-3">
           <label htmlFor="ask-input" className="sr-only">Your question</label>
           <input
             id="ask-input" type="text" value={input} onChange={e => setInput(e.target.value)} maxLength={2000}
             placeholder="Ask about your revenue, categories, trends, anomalies..."
-            className="flex-1 px-4 py-3 rounded-xl bg-black/40 border border-white/10 text-white text-sm focus:outline-none focus:border-indigo-500 transition-all"
+            className="flex-1 px-4 py-3 rounded-xl bg-white border border-[#e6ddc9] text-[#3d3335] text-sm focus:outline-none focus:border-[#b9855a] transition-all"
           />
-          <button type="submit" disabled={sending || !input.trim()} aria-label="Send" className="p-3 rounded-xl bg-indigo-500 hover:bg-indigo-600 disabled:bg-indigo-500/50 text-white transition-all">
+          <button type="submit" disabled={sending || !input.trim()} aria-label="Send" className="p-3 rounded-xl bg-[#b9855a] hover:bg-[#9c6b3f] disabled:bg-[#b9855a]/50 text-white transition-all">
             <Send className="w-4 h-4" />
           </button>
         </form>

@@ -51,22 +51,22 @@ export default function ChatPanel() {
     <>
       <button
         onClick={() => setOpen(!open)}
-        className="fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white shadow-lg shadow-indigo-500/30 flex items-center justify-center transition-all"
+        className="fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full bg-[#9c6b3f] hover:bg-[#7f5631] text-white shadow-lg flex items-center justify-center transition-colors"
         title="Chat with SAGE"
       >
         {open ? <X className="w-5 h-5" /> : <MessageCircle className="w-5 h-5" />}
       </button>
 
       {open && (
-        <div className="fixed bottom-24 right-6 z-40 w-full max-w-sm h-[520px] max-h-[70vh] glass-card flex flex-col overflow-hidden shadow-2xl">
-          <div className="px-4 py-3 border-b border-white/5 flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-violet-400" />
-            <h3 className="font-bold text-white text-sm">Chat with SAGE</h3>
+        <div className="fixed bottom-24 right-6 z-40 w-full max-w-sm h-[520px] max-h-[70vh] glass-card flex flex-col overflow-hidden shadow-xl">
+          <div className="px-4 py-3 border-b border-[#efe8d8] flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-[#9c6b3f]" />
+            <h3 className="font-bold text-[#3d3335] text-sm">Chat with SAGE</h3>
           </div>
 
           <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
             {messages.length === 0 && (
-              <p className="text-xs text-gray-500 text-center mt-6">
+              <p className="text-xs text-[#8a7d78] text-center mt-6">
                 Ask SAGE about your revenue, categories, growth trends, or flagged anomalies.
               </p>
             )}
@@ -76,8 +76,8 @@ export default function ChatPanel() {
                 <div
                   className={`max-w-[85%] rounded-xl px-3 py-2 text-xs leading-relaxed ${
                     m.role === "user"
-                      ? "bg-indigo-500/20 border border-indigo-500/20 text-white"
-                      : "bg-white/5 border border-white/10 text-gray-200"
+                      ? "bg-[#9c6b3f] text-white"
+                      : "bg-[#efe8d8] border border-[#e6ddc9] text-[#4a3f41]"
                   }`}
                 >
                   <p>{m.content}</p>
@@ -92,7 +92,7 @@ export default function ChatPanel() {
 
             {sending && (
               <div className="flex justify-start">
-                <div className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-gray-400 animate-pulse">
+                <div className="bg-[#efe8d8] border border-[#e6ddc9] rounded-xl px-3 py-2 text-xs text-[#8a7d78] animate-pulse">
                   Thinking...
                 </div>
               </div>
@@ -100,22 +100,22 @@ export default function ChatPanel() {
           </div>
 
           {error && (
-            <div className="px-4 pb-2 text-[11px] text-rose-400">{error}</div>
+            <div className="px-4 pb-2 text-[11px] text-rose-600">{error}</div>
           )}
 
-          <form onSubmit={handleSend} className="p-3 border-t border-white/5 flex items-center gap-2">
+          <form onSubmit={handleSend} className="p-3 border-t border-[#efe8d8] flex items-center gap-2">
             <input
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Ask about your data..."
               maxLength={2000}
-              className="flex-1 px-3 py-2 rounded-lg bg-black/40 border border-white/10 text-white text-xs focus:outline-none focus:border-indigo-500 transition-all"
+              className="flex-1 px-3 py-2 rounded-lg bg-white border border-[#d9cdb8] text-[#3d3335] text-xs focus:outline-none focus:border-[#b9855a] transition-all"
             />
             <button
               type="submit"
               disabled={sending || !input.trim()}
-              className="p-2 rounded-lg bg-indigo-500 hover:bg-indigo-600 disabled:bg-indigo-500/50 text-white transition-all"
+              className="p-2 rounded-lg bg-[#9c6b3f] hover:bg-[#7f5631] disabled:bg-[#cca87c] text-white transition-colors"
             >
               <Send className="w-3.5 h-3.5" />
             </button>

@@ -116,46 +116,43 @@ export default function Onboarding() {
   const currentSheet = sheetsList.find(s => s.id === selectedSheetId);
 
   return (
-    <main className="min-h-screen bg-[#08080c] flex flex-col justify-center items-center px-4 py-12 relative overflow-hidden">
-      {/* Background glow points */}
-      <div className="absolute top-1/4 left-1/4 w-[400px] h-[400px] bg-indigo-500/5 rounded-full blur-[120px] pointer-events-none"></div>
-      <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-purple-500/5 rounded-full blur-[120px] pointer-events-none"></div>
+    <main className="min-h-screen bg-[#f6f1e7] flex flex-col justify-center items-center px-4 py-12 relative overflow-hidden">
 
       <div className="w-full max-w-md space-y-6 z-10">
         
         <div className="text-center">
-          <h1 className="text-3xl font-extrabold text-white tracking-tight bg-gradient-to-r from-white via-indigo-100 to-purple-100 bg-clip-text text-transparent glow-text-indigo">
+          <h1 className="text-3xl font-bold text-[#3d3335] tracking-tight">
             Data Setup
           </h1>
-          <p className="text-xs text-gray-500 mt-1.5 font-medium">Connect your spreadsheet data to get started</p>
+          <p className="text-xs text-[#8a7d78] mt-1.5 font-medium">Connect your spreadsheet data to get started</p>
         </div>
 
         {error && (
-          <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-200 text-sm flex gap-3 items-start">
-            <AlertCircle className="w-5 h-5 shrink-0 text-red-400" />
+          <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm flex gap-3 items-start">
+            <AlertCircle className="w-5 h-5 shrink-0 text-red-500" />
             <span>{error}</span>
           </div>
         )}
 
-        <div className="glass-card p-8 shadow-2xl relative space-y-6">
-          <h2 className="text-base font-bold text-white text-center">Connect Your Data Account</h2>
-          <p className="text-xs text-gray-400 text-center leading-normal">SAGE requires a connected data table to run local statistics and compile AI insights.</p>
+        <div className="glass-card p-8 shadow-lg relative space-y-6">
+          <h2 className="text-base font-bold text-[#3d3335] text-center">Connect Your Data Account</h2>
+          <p className="text-xs text-[#8a7d78] text-center leading-normal">SAGE requires a connected data table to run local statistics and compile AI insights.</p>
 
           {/* Google Sheets Integration Card */}
-          <div className="p-4 rounded-xl border border-white/5 bg-black/20 flex flex-col gap-4">
+          <div className="p-4 rounded-xl border border-[#efe8d8] bg-[#f6f1e7] flex flex-col gap-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-600">
                   <Database className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-white text-xs">Google Sheets</h3>
-                  <p className="text-[10px] text-gray-500">Sync customer transaction sheets</p>
+                  <h3 className="font-semibold text-[#3d3335] text-xs">Google Sheets</h3>
+                  <p className="text-[10px] text-[#8a7d78]">Sync customer transaction sheets</p>
                 </div>
               </div>
 
               {isConnected ? (
-                <span className="flex items-center gap-1.5 text-[10px] text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full font-bold border border-emerald-500/20">
+                <span className="flex items-center gap-1.5 text-[10px] text-emerald-600 bg-emerald-500/10 px-2.5 py-1 rounded-full font-bold border border-emerald-500/20">
                   <CheckCircle className="w-3 h-3" />
                   <span>Connected</span>
                 </span>
@@ -163,7 +160,7 @@ export default function Onboarding() {
                 <button
                   onClick={handleGoogleConnect}
                   disabled={sheetsLoading}
-                  className="text-[10px] px-3.5 py-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 text-white font-bold transition-all"
+                  className="text-[10px] px-3.5 py-1.5 rounded-lg bg-[#efe8d8] border border-[#e6ddc9] hover:bg-[#f6f1e7] text-[#3d3335] font-bold transition-all"
                 >
                   Connect
                 </button>
@@ -171,9 +168,9 @@ export default function Onboarding() {
             </div>
 
             {isConnected && (
-              <div className="space-y-3 pt-3 border-t border-white/5">
+              <div className="space-y-3 pt-3 border-t border-[#efe8d8]">
                 <div>
-                  <label className="block text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-1">Select Spreadsheet</label>
+                  <label className="block text-[9px] font-bold text-[#8a7d78] uppercase tracking-widest mb-1">Select Spreadsheet</label>
                   <select
                     value={selectedSheetId}
                     onChange={(e) => {
@@ -183,7 +180,7 @@ export default function Onboarding() {
                         setSelectedSheetName(sh.sheets[0]);
                       }
                     }}
-                    className="w-full px-3 py-2 rounded-lg bg-black/40 border border-white/10 text-white text-xs focus:outline-none focus:border-indigo-500 transition-all"
+                    className="w-full px-3 py-2 rounded-lg bg-white border border-[#e6ddc9] text-[#3d3335] text-xs focus:outline-none focus:border-[#b9855a] transition-all"
                   >
                     {sheetsList.map(s => (
                       <option key={s.id} value={s.id}>{s.name}</option>
@@ -193,11 +190,11 @@ export default function Onboarding() {
 
                 {currentSheet && (
                   <div>
-                    <label className="block text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-1">Select Sheet Tab</label>
+                    <label className="block text-[9px] font-bold text-[#8a7d78] uppercase tracking-widest mb-1">Select Sheet Tab</label>
                     <select
                       value={selectedSheetName}
                       onChange={(e) => setSelectedSheetName(e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg bg-black/40 border border-white/10 text-white text-xs focus:outline-none focus:border-indigo-500 transition-all"
+                      className="w-full px-3 py-2 rounded-lg bg-white border border-[#e6ddc9] text-[#3d3335] text-xs focus:outline-none focus:border-[#b9855a] transition-all"
                     >
                       {currentSheet.sheets.map(tab => (
                         <option key={tab} value={tab}>{tab}</option>
@@ -211,10 +208,10 @@ export default function Onboarding() {
 
           {/* Pipeline Loading State Indicator */}
           {syncStep !== "idle" && (
-            <div className="p-4 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-200 space-y-3">
+            <div className="p-4 rounded-xl bg-[#f2e9dc] border border-[#ddc2a0] text-[#66431f] space-y-3">
               <div className="flex items-center justify-between text-[11px] font-bold">
                 <span className="flex items-center gap-2">
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-indigo-400" />
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#9c6b3f]" />
                   {syncStep === "pulling" && "Pulling spreadsheet row entries..."}
                   {syncStep === "profiling" && "Running statistical calculations..."}
                   {syncStep === "generating" && "Claude API compiling insights..."}
@@ -224,9 +221,9 @@ export default function Onboarding() {
               </div>
               
               {/* Visual Progress Bar */}
-              <div className="w-full h-1.5 bg-black/40 rounded-full overflow-hidden">
+              <div className="w-full h-1.5 bg-[#ead9c2] rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-indigo-500 transition-all duration-500"
+                  className="h-full bg-[#9c6b3f] transition-all duration-500"
                   style={{
                     width: 
                       syncStep === "pulling" ? "25%" : 
@@ -241,18 +238,18 @@ export default function Onboarding() {
           {isConnected && syncStep === "idle" && (
             <button
               onClick={startAnalysisPipeline}
-              className="w-full py-3 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-semibold transition-all shadow-lg shadow-indigo-500/25 flex justify-center items-center gap-2 text-xs"
+              className="w-full py-3 rounded-lg bg-[#9c6b3f] hover:bg-[#7f5631] text-white font-semibold transition-all shadow-sm flex justify-center items-center gap-2 text-xs"
             >
               <BarChart3 className="w-4 h-4" />
               <span>Begin Analysis Pipeline</span>
             </button>
           )}
 
-          <div className="flex items-center gap-3 text-[10px] text-gray-600 uppercase tracking-widest">
-            <div className="flex-1 border-t border-white/5"></div><span>or</span><div className="flex-1 border-t border-white/5"></div>
+          <div className="flex items-center gap-3 text-[10px] text-[#6d6062] uppercase tracking-widest">
+            <div className="flex-1 border-t border-[#efe8d8]"></div><span>or</span><div className="flex-1 border-t border-[#efe8d8]"></div>
           </div>
 
-          <label className="flex items-center justify-center gap-2 w-full py-4 rounded-xl border border-dashed border-white/10 hover:border-indigo-500/40 hover:bg-white/5 cursor-pointer transition-all text-xs text-gray-400">
+          <label className="flex items-center justify-center gap-2 w-full py-4 rounded-xl border border-dashed border-[#d9cdb8] hover:border-[#b9855a]/40 hover:bg-[#efe8d8] cursor-pointer transition-all text-xs text-[#8a7d78]">
             <Upload className="w-4 h-4" />
             <span>Upload a CSV or XLSX file instead</span>
             <input type="file" accept=".csv,.xlsx" className="hidden" disabled={syncStep !== "idle"} onChange={handleFileUpload} />
@@ -260,14 +257,14 @@ export default function Onboarding() {
 
           <button
             onClick={() => router.push("/dashboard")}
-            className="w-full text-center text-xs text-gray-400 hover:text-white transition-all"
+            className="w-full text-center text-xs text-[#8a7d78] hover:text-[#3d3335] transition-all"
           >
             Skip for now — take me to the dashboard
           </button>
 
           <button
             onClick={handleSignOut}
-            className="w-full text-center text-xs text-gray-500 hover:text-white transition-all underline flex items-center justify-center gap-2"
+            className="w-full text-center text-xs text-[#8a7d78] hover:text-[#3d3335] transition-all underline flex items-center justify-center gap-2"
           >
             <LogOut className="w-3.5 h-3.5" />
             <span>Sign Out</span>

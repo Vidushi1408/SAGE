@@ -1,11 +1,11 @@
 @import "tailwindcss";
 
 :root {
-  --background: #08080c;
-  --foreground: #f1f1f6;
-  --card: #121218;
-  --border: #20202a;
-  --accent: #7c3aed;
+  --background: #f6f1e7;
+  --foreground: #3d3335;
+  --card: #fffdf8;
+  --border: #e6ddc9;
+  --accent: #9c6b3f;
   --accent-foreground: #ffffff;
 }
 
@@ -21,10 +21,6 @@
 
 body {
   background-color: var(--background);
-  background-image: 
-    radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.1) 0px, transparent 50%),
-    radial-gradient(at 50% 0%, rgba(139, 92, 246, 0.06) 0px, transparent 40%),
-    radial-gradient(at 100% 0%, rgba(217, 70, 239, 0.1) 0px, transparent 50%);
   color: var(--foreground);
   min-height: 100vh;
 }
@@ -35,40 +31,26 @@ body {
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #09090c;
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #1c1c24;
+  background: #d9cdb8;
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #2b2b36;
+  background: #c2b393;
 }
 
-/* Premium UI Panels */
+/* Card panels */
 .glass-card {
-  background: rgba(16, 16, 24, 0.7);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--card);
+  border: 1px solid var(--border);
   border-radius: 14px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 2px rgba(61, 51, 53, 0.05);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 .glass-card:hover {
-  border-color: rgba(139, 92, 246, 0.2);
-  box-shadow: 0 12px 40px -12px rgba(124, 58, 237, 0.18);
-}
-
-.glow-text-indigo {
-  text-shadow: 0 0 25px rgba(99, 102, 241, 0.55);
-}
-
-@keyframes pulse-slow {
-  0%, 100% { opacity: 0.4; }
-  50% { opacity: 0.8; }
-}
-
-.animate-pulse-slow {
-  animation: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  border-color: #d9cdb8;
+  box-shadow: 0 4px 14px rgba(61, 51, 53, 0.08);
 }

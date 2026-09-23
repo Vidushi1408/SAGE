@@ -19,12 +19,12 @@ function Kpi({ label, value, hint, icon, tone }: { label: string; value: string;
   return (
     <div className="glass-card p-6 flex flex-col justify-between">
       <div className="flex justify-between items-start mb-4">
-        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">{label}</span>
+        <span className="text-xs font-bold text-[#8a7d78] uppercase tracking-widest">{label}</span>
         <div className={`p-2 rounded-lg ${tone}`}>{icon}</div>
       </div>
       <div>
-        <div className="text-2xl font-extrabold text-white">{value}</div>
-        <div className="text-[10px] text-gray-500 mt-1">{hint}</div>
+        <div className="text-2xl font-bold text-[#3d3335]">{value}</div>
+        <div className="text-[10px] text-[#8a7d78] mt-1">{hint}</div>
       </div>
     </div>
   );
@@ -42,17 +42,17 @@ function GettingStarted() {
   return (
     <div className="glass-card p-6 space-y-5">
       <div>
-        <h2 className="text-base font-bold text-white flex items-center gap-2"><Sparkles className="w-4 h-4 text-violet-400" /> Get started with SAGE</h2>
-        <p className="text-xs text-gray-500 mt-1">Three quick steps and your dashboard fills itself in.</p>
+        <h2 className="text-base font-bold text-[#3d3335] flex items-center gap-2"><Sparkles className="w-4 h-4 text-[#9c6b3f]" /> Get started with SAGE</h2>
+        <p className="text-xs text-[#8a7d78] mt-1">Three quick steps and your dashboard fills itself in.</p>
       </div>
       <ol className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {steps.map((s, i) => (
-          <li key={s.title} className={`p-4 rounded-xl border ${s.done ? "border-emerald-500/20 bg-emerald-500/5" : "border-white/10 bg-black/20"} flex flex-col gap-3`}>
-            <div className="flex items-center gap-2 text-xs font-bold text-white">
-              {s.done ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <Circle className="w-4 h-4 text-gray-600" />}
+          <li key={s.title} className={`p-4 rounded-xl border ${s.done ? "border-emerald-200 bg-emerald-50" : "border-[#e6ddc9] bg-[#f6f1e7]"} flex flex-col gap-3`}>
+            <div className="flex items-center gap-2 text-xs font-bold text-[#3d3335]">
+              {s.done ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <Circle className="w-4 h-4 text-[#6d6062]" />}
               {i + 1}. {s.title}
             </div>
-            <p className="text-xs text-gray-500 leading-relaxed flex-1">{s.body}</p>
+            <p className="text-xs text-[#8a7d78] leading-relaxed flex-1">{s.body}</p>
             {!s.done && canWrite && (s.action ? (
               <button onClick={refreshAnalysis} disabled={refreshing || !connected} className={primaryButton}>
                 {refreshing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : null}{s.cta}
@@ -85,12 +85,12 @@ export default function OverviewPage() {
         title={`${greeting()}, ${name}`}
         subtitle={lastAnalysedAt ? `Here's how your business is doing. Last analysed ${timeAgo(lastAnalysedAt)}.` : "Welcome to your SAGE workspace."}
         actions={insightHistory.length > 0 && (
-          <label className="flex items-center gap-2 text-xs text-gray-500">
+          <label className="flex items-center gap-2 text-xs text-[#8a7d78]">
             Snapshot
             <select
               value={selectedInsightId}
               onChange={(e) => selectInsight(e.target.value)}
-              className="px-3 py-1.5 rounded-lg bg-black/40 border border-white/10 text-white text-xs focus:outline-none focus:border-indigo-500"
+              className="px-3 py-1.5 rounded-lg bg-white border border-[#e6ddc9] text-[#3d3335] text-xs focus:outline-none focus:border-[#b9855a]"
             >
               <option value="latest">Latest</option>
               {insightHistory.map(h => <option key={h.id} value={h.id}>{formatDateTime(h.created_at)}</option>)}
@@ -108,39 +108,39 @@ export default function OverviewPage() {
       {warnings.length > 0 && (
         <Alert tone="warning">
           <p className="font-bold flex items-center gap-2 mb-1"><AlertTriangle className="w-4 h-4" /> Some of your data may not be read correctly</p>
-          {warnings.map((w, i) => <p key={i} className="text-amber-200/80">{w}</p>)}
+          {warnings.map((w, i) => <p key={i} className="text-amber-700">{w}</p>)}
         </Alert>
       )}
 
       {insights?.recommendation && (
-        <div className="p-5 rounded-2xl bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-pink-500/10 border border-indigo-500/20 flex gap-3 items-start shadow-lg shadow-indigo-500/5">
-          <Sparkles className="w-5 h-5 text-violet-400 shrink-0 mt-0.5" />
+        <div className="p-5 rounded-2xl bg-[#f2e9dc] border border-[#ead9c2] flex gap-3 items-start">
+          <Sparkles className="w-5 h-5 text-[#9c6b3f] shrink-0 mt-0.5" />
           <div>
-            <h2 className="font-bold text-white text-sm">Recommended next step</h2>
-            <p className="text-gray-300 text-xs mt-0.5 leading-relaxed font-medium">{insights.recommendation}</p>
+            <h2 className="font-bold text-[#3d3335] text-sm">Recommended next step</h2>
+            <p className="text-[#6d6062] text-xs mt-0.5 leading-relaxed font-medium">{insights.recommendation}</p>
           </div>
         </div>
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Kpi label="Total Sales" value={formatMoney(summary.total_revenue)} hint="Gross sales in the analysed window" icon={<DollarSign className="w-4 h-4" />} tone="bg-indigo-500/10 text-indigo-400" />
-        <Kpi label="Transactions" value={String(summary.total_transactions)} hint="Entries processed" icon={<Activity className="w-4 h-4" />} tone="bg-purple-500/10 text-purple-400" />
-        <Kpi label="Average Sale" value={formatMoney(summary.avg_transaction_value)} hint="Average ticket value" icon={<HelpCircle className="w-4 h-4" />} tone="bg-pink-500/10 text-pink-400" />
+        <Kpi label="Total Sales" value={formatMoney(summary.total_revenue)} hint="Gross sales in the analysed window" icon={<DollarSign className="w-4 h-4" />} tone="bg-[#f2e9dc] text-[#9c6b3f]" />
+        <Kpi label="Transactions" value={String(summary.total_transactions)} hint="Entries processed" icon={<Activity className="w-4 h-4" />} tone="bg-[#f2e9dc] text-[#7d6864]" />
+        <Kpi label="Average Sale" value={formatMoney(summary.avg_transaction_value)} hint="Average ticket value" icon={<HelpCircle className="w-4 h-4" />} tone="bg-[#efe6d3] text-[#a08a5c]" />
         <Kpi
           label="Weekly Growth"
           value={growth !== null && growth !== undefined ? `${growth > 0 ? "+" : ""}${growth.toFixed(1)}%` : "n/a"}
           hint="Latest week vs the week before"
           icon={growth !== null && growth !== undefined && growth < 0 ? <TrendingDown className="w-4 h-4" /> : <TrendingUp className="w-4 h-4" />}
-          tone={growth !== null && growth !== undefined && growth < 0 ? "bg-rose-500/10 text-rose-400" : "bg-emerald-500/10 text-emerald-400"}
+          tone={growth !== null && growth !== undefined && growth < 0 ? "bg-rose-50 text-rose-600" : "bg-emerald-50 text-emerald-600"}
         />
       </div>
 
       {topCategory && (
         <div className="glass-card p-4 flex items-center gap-3 text-xs">
-          <Trophy className="w-4 h-4 text-amber-400" />
-          <span className="text-gray-400">Top category:</span>
-          <span className="font-bold text-white">{topCategory.category}</span>
-          <span className="text-gray-500">{formatMoney(topCategory.revenue)} · {topCategory.share_pct.toFixed(1)}% of sales</span>
+          <Trophy className="w-4 h-4 text-amber-600" />
+          <span className="text-[#8a7d78]">Top category:</span>
+          <span className="font-bold text-[#3d3335]">{topCategory.category}</span>
+          <span className="text-[#8a7d78]">{formatMoney(topCategory.revenue)} · {topCategory.share_pct.toFixed(1)}% of sales</span>
         </div>
       )}
 
@@ -149,11 +149,11 @@ export default function OverviewPage() {
           {insights.insights.map((insight, idx) => (
             <div key={idx} className="glass-card p-6 flex flex-col justify-between gap-4">
               <div className="space-y-1">
-                <h3 className="font-extrabold text-white text-sm flex items-center gap-2">
-                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-500" />
+                <h3 className="font-bold text-[#3d3335] text-sm flex items-center gap-2">
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#b9855a]" />
                   {insight.title}
                 </h3>
-                <p className="text-xs text-gray-400 leading-relaxed">{insight.explanation}</p>
+                <p className="text-xs text-[#8a7d78] leading-relaxed">{insight.explanation}</p>
               </div>
               <InsightChart insight={insight} idx={idx} />
             </div>
@@ -165,17 +165,17 @@ export default function OverviewPage() {
 
       {anomalies.length > 0 && (
         <div className="glass-card p-6">
-          <div className="flex items-center justify-between mb-4 border-b border-white/5 pb-3">
-            <h2 className="font-extrabold text-white text-sm flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-rose-400" /> Needs your attention</h2>
-            <Link href="/insights" className="text-xs font-semibold text-indigo-300 hover:text-white flex items-center gap-1">All {anomalies.length} <ArrowRight className="w-3 h-3" /></Link>
+          <div className="flex items-center justify-between mb-4 border-b border-[#efe8d8] pb-3">
+            <h2 className="font-bold text-[#3d3335] text-sm flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-rose-600" /> Needs your attention</h2>
+            <Link href="/insights" className="text-xs font-semibold text-[#9c6b3f] hover:text-[#3d3335] flex items-center gap-1">All {anomalies.length} <ArrowRight className="w-3 h-3" /></Link>
           </div>
-          <ul className="divide-y divide-white/5">
+          <ul className="divide-y divide-[#efe8d8]">
             {anomalies.slice(0, 3).map((a, i) => (
               <li key={i} className="py-3 flex items-center justify-between gap-3 text-xs">
-                <span className="text-gray-300"><span className="font-mono text-gray-500 mr-2">{a.transaction_id}</span>{a.date}</span>
+                <span className="text-[#6d6062]"><span className="font-mono text-[#8a7d78] mr-2">{a.transaction_id}</span>{a.date}</span>
                 <span className="flex items-center gap-3">
-                  <span className="text-gray-500 hidden sm:inline">{a.reason}</span>
-                  <span className={`font-bold ${a.amount < 0 ? "text-rose-400" : "text-amber-400"}`}>{formatMoney(a.amount)}</span>
+                  <span className="text-[#8a7d78] hidden sm:inline">{a.reason}</span>
+                  <span className={`font-bold ${a.amount < 0 ? "text-rose-600" : "text-amber-600"}`}>{formatMoney(a.amount)}</span>
                 </span>
               </li>
             ))}

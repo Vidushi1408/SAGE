@@ -11,12 +11,12 @@ function SourceCard({ icon, tone, title, subtitle, badge, children }: {
 }) {
   return (
     <section className="glass-card p-6 space-y-4">
-      <div className="flex items-center justify-between gap-3 border-b border-white/5 pb-4">
+      <div className="flex items-center justify-between gap-3 border-b border-[#efe8d8] pb-4">
         <div className="flex items-center gap-3">
           <div className={`p-2.5 rounded-lg border ${tone}`}>{icon}</div>
           <div>
-            <h2 className="font-bold text-white text-base">{title}</h2>
-            <p className="text-xs text-gray-500">{subtitle}</p>
+            <h2 className="font-bold text-[#3d3335] text-base">{title}</h2>
+            <p className="text-xs text-[#8a7d78]">{subtitle}</p>
           </div>
         </div>
         {badge}
@@ -171,12 +171,12 @@ export default function DataPage() {
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
         <SourceCard
-          icon={<Database className="w-5 h-5" />} tone="bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+          icon={<Database className="w-5 h-5" />} tone="bg-emerald-50 border-emerald-100 text-emerald-600"
           title="Google Sheets" subtitle={google.connected ? `Connected as ${google.email ?? "your Google account"}` : "Live-sync a spreadsheet of your sales"}
           badge={canWrite && (google.connected ? (
             <div className="flex gap-2">
               <button onClick={connectGoogle} className={secondaryButton}>Reconnect</button>
-              <button onClick={disconnectGoogle} disabled={googleBusy} className="px-3 py-2 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 text-xs font-semibold">Disconnect</button>
+              <button onClick={disconnectGoogle} disabled={googleBusy} className="px-3 py-2 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-600 hover:bg-rose-500/20 text-xs font-semibold">Disconnect</button>
             </div>
           ) : (
             <button onClick={connectGoogle} className={primaryButton}>Connect Google</button>
@@ -186,8 +186,8 @@ export default function DataPage() {
             <Alert tone="warning">Demo mode: Google sign-in isn&apos;t set up on this server, so SAGE is using sample data. See GOOGLE_SETUP.md to connect real accounts.</Alert>
           )}
           {!google.connected && (
-            <p className="text-xs text-gray-500 leading-relaxed">
-              Sign in with Google and choose a spreadsheet. SAGE only ever <strong className="text-gray-300">reads</strong> your sheets; it can never edit or delete them, and you can disconnect at any time.
+            <p className="text-xs text-[#8a7d78] leading-relaxed">
+              Sign in with Google and choose a spreadsheet. SAGE only ever <strong className="text-[#6d6062]">reads</strong> your sheets; it can never edit or delete them, and you can disconnect at any time.
             </p>
           )}
 
@@ -214,17 +214,17 @@ export default function DataPage() {
                   )}
                 </div>
               ) : (
-                <p className="p-5 text-center text-gray-500 text-xs border border-dashed border-white/10 rounded-xl">
+                <p className="p-5 text-center text-[#8a7d78] text-xs border border-dashed border-[#d9cdb8] rounded-xl">
                   No spreadsheets found in this Google account yet. {!google.is_mock && "Paste a link to one below."}
                 </p>
               )}
 
-              {syncRows !== null && <p className="text-xs text-emerald-400 font-semibold flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5" /> {syncRows} rows imported.</p>}
-              {google.last_synced_at && <p className="text-[11px] text-gray-500">Last synced {timeAgo(google.last_synced_at)}{google.rows_synced != null ? ` · ${google.rows_synced} rows` : ""}{google.sheet_name ? ` · ${google.sheet_name}` : ""}</p>}
+              {syncRows !== null && <p className="text-xs text-emerald-600 font-semibold flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5" /> {syncRows} rows imported.</p>}
+              {google.last_synced_at && <p className="text-[11px] text-[#8a7d78]">Last synced {timeAgo(google.last_synced_at)}{google.rows_synced != null ? ` · ${google.rows_synced} rows` : ""}{google.sheet_name ? ` · ${google.sheet_name}` : ""}</p>}
               {googleError && <Alert tone="error">{googleError}</Alert>}
 
               {canWrite && !google.is_mock && (
-                <form onSubmit={addByLink} className="pt-2 border-t border-white/5 space-y-2">
+                <form onSubmit={addByLink} className="pt-2 border-t border-[#efe8d8] space-y-2">
                   <label htmlFor="sheet-link" className={labelClass}>Or add a spreadsheet by link</label>
                   <div className="flex flex-col sm:flex-row gap-3">
                     <input id="sheet-link" value={link} onChange={e => setLink(e.target.value)} placeholder="https://docs.google.com/spreadsheets/d/..." className={inputClass} />
@@ -237,30 +237,30 @@ export default function DataPage() {
         </SourceCard>
 
         {canWrite && (
-          <SourceCard icon={<Upload className="w-5 h-5" />} tone="bg-indigo-500/10 border-indigo-500/20 text-indigo-400" title="Upload a file" subtitle="Import a CSV or XLSX export (max 5MB)">
+          <SourceCard icon={<Upload className="w-5 h-5" />} tone="bg-[#f2e9dc] border-[#ead9c2] text-[#9c6b3f]" title="Upload a file" subtitle="Import a CSV or XLSX export (max 5MB)">
             {uploadOk && <Alert tone="success">{uploadOk}</Alert>}
             {uploadError && <Alert tone="error">{uploadError}</Alert>}
             {uploadWarnings.length > 0 && <Alert tone="warning">{uploadWarnings.map((w, i) => <p key={i}>{w}</p>)}</Alert>}
-            <label className="flex items-center justify-center gap-2 w-full py-8 rounded-xl border border-dashed border-white/10 hover:border-indigo-500/40 hover:bg-white/5 cursor-pointer transition-all text-xs text-gray-400 focus-within:border-indigo-500">
-              {uploading ? <><RefreshCw className="w-4 h-4 animate-spin text-indigo-400" /> Uploading and analysing...</> : <><Upload className="w-4 h-4" /> Choose a .csv or .xlsx file</>}
+            <label className="flex items-center justify-center gap-2 w-full py-8 rounded-xl border border-dashed border-[#d9cdb8] hover:border-[#b9855a]/40 hover:bg-[#efe8d8] cursor-pointer transition-all text-xs text-[#8a7d78] focus-within:border-[#b9855a]">
+              {uploading ? <><RefreshCw className="w-4 h-4 animate-spin text-[#9c6b3f]" /> Uploading and analysing...</> : <><Upload className="w-4 h-4" /> Choose a .csv or .xlsx file</>}
               <input type="file" accept=".csv,.xlsx" className="sr-only" disabled={uploading} onChange={onUpload} />
             </label>
-            <p className="text-[11px] text-gray-600">SAGE recognises common column names (Date, Amount, Category, Quantity) and formats like $1,200.50 or 1.234,50.</p>
+            <p className="text-[11px] text-[#6d6062]">SAGE recognises common column names (Date, Amount, Category, Quantity) and formats like $1,200.50 or 1.234,50.</p>
           </SourceCard>
         )}
 
         <SourceCard
-          icon={<Hash className="w-5 h-5" />} tone="bg-violet-500/10 border-violet-500/20 text-violet-400"
+          icon={<Hash className="w-5 h-5" />} tone="bg-[#f2e9dc] border-[#f2e9dc] text-[#7d6864]"
           title="Slack alerts" subtitle="Post anomalies and insights to a channel"
-          badge={slack.connected && <span className="flex items-center gap-1.5 text-[10px] text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full font-bold border border-emerald-500/20"><CheckCircle2 className="w-3 h-3" /> Connected</span>}
+          badge={slack.connected && <span className="flex items-center gap-1.5 text-[10px] text-emerald-600 bg-emerald-500/10 px-2.5 py-1 rounded-full font-bold border border-emerald-500/20"><CheckCircle2 className="w-3 h-3" /> Connected</span>}
         >
           {slackError && <Alert tone="error">{slackError}</Alert>}
           {!isAdmin ? (
-            <p className="text-xs text-gray-500">Only workspace administrators can manage Slack alerts.</p>
+            <p className="text-xs text-[#8a7d78]">Only workspace administrators can manage Slack alerts.</p>
           ) : slack.connected ? (
-            <div className="flex items-center justify-between gap-3 text-xs text-gray-400">
+            <div className="flex items-center justify-between gap-3 text-xs text-[#8a7d78]">
               <span className="font-mono truncate">{slack.webhook_url}</span>
-              <button onClick={disconnectSlack} disabled={slackBusy} className="px-3 py-1.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 font-semibold shrink-0">Disconnect</button>
+              <button onClick={disconnectSlack} disabled={slackBusy} className="px-3 py-1.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-600 hover:bg-rose-500/20 font-semibold shrink-0">Disconnect</button>
             </div>
           ) : (
             <form onSubmit={connectSlack} className="flex flex-col sm:flex-row gap-3">
@@ -273,10 +273,10 @@ export default function DataPage() {
       </div>
 
       <section className="glass-card p-6 space-y-4" aria-labelledby="tx-heading">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/5 pb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#efe8d8] pb-4">
           <div>
-            <h2 id="tx-heading" className="font-bold text-white text-base flex items-center gap-2"><Table2 className="w-4 h-4 text-gray-500" /> Imported transactions</h2>
-            <p className="text-xs text-gray-500">{total > rows.length ? `Showing the first ${rows.length} of ${total} rows` : `${total} rows`}</p>
+            <h2 id="tx-heading" className="font-bold text-[#3d3335] text-base flex items-center gap-2"><Table2 className="w-4 h-4 text-[#8a7d78]" /> Imported transactions</h2>
+            <p className="text-xs text-[#8a7d78]">{total > rows.length ? `Showing the first ${rows.length} of ${total} rows` : `${total} rows`}</p>
           </div>
           <input aria-label="Filter transactions" value={filter} onChange={e => setFilter(e.target.value)} placeholder="Filter rows" className={`${inputClass} sm:w-56`} />
         </div>
@@ -286,15 +286,15 @@ export default function DataPage() {
           <EmptyState icon={<Table2 className="w-5 h-5" />} title="No data imported yet" body="Connect Google Sheets or upload a file above and your rows will show up here." />
         ) : (
           <div className="overflow-x-auto max-h-[28rem]">
-            <table className="w-full text-left text-xs text-gray-400">
-              <thead className="sticky top-0 bg-[#0c0c12]">
-                <tr className="border-b border-white/5 text-gray-500 font-semibold">{columns.map(c => <th key={c} className="py-2.5 pr-4 whitespace-nowrap">{c}</th>)}</tr>
+            <table className="w-full text-left text-xs text-[#8a7d78]">
+              <thead className="sticky top-0 bg-white">
+                <tr className="border-b border-[#efe8d8] text-[#8a7d78] font-semibold">{columns.map(c => <th key={c} className="py-2.5 pr-4 whitespace-nowrap">{c}</th>)}</tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody className="divide-y divide-[#efe8d8]">
                 {filteredRows.map((r, i) => (
-                  <tr key={i} className="hover:bg-white/[0.02]">{columns.map(c => <td key={c} className="py-2.5 pr-4 whitespace-nowrap">{String(r[c] ?? "")}</td>)}</tr>
+                  <tr key={i} className="hover:bg-[#f6f1e7]">{columns.map(c => <td key={c} className="py-2.5 pr-4 whitespace-nowrap">{String(r[c] ?? "")}</td>)}</tr>
                 ))}
-                {filteredRows.length === 0 && <tr><td colSpan={columns.length} className="py-6 text-center text-gray-600">No rows match your filter.</td></tr>}
+                {filteredRows.length === 0 && <tr><td colSpan={columns.length} className="py-6 text-center text-[#6d6062]">No rows match your filter.</td></tr>}
               </tbody>
             </table>
           </div>

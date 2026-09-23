@@ -121,3 +121,57 @@ def test_api_endpoints_profiling(client):
     latest_res = client.get("/api/v1/data/profile/latest", headers=headers)
     assert latest_res.status_code == 200
     assert latest_res.json()["summary"]["total_transactions"] == 150
+
+
+def test_profiler_new_breakdowns():
+    """all_categories, payment_breakdown, quantity_breakdown and amount_distribution are populated."""
+    user_id = uuid4()
+    account_id = uuid4()
+
+    def row(day, amount, category, qty, payment):
+        return SyncedData(
+            id=uuid4(), user_id=user_id, connected_account_id=account_id,
+            source="google_sheets", external_id=day,
+            raw_payload={"Date": day, "Amount": amount, "Category": category, "Quantity": qty, "Payment Method": payment}
+        )
+
+    records = [
+        row("2026-05-01", 10, "Coffee", 1, "Card"),
+        row("2026-05-02", 20, "Coffee", 2, "Cash"),
+        row("2026-05-03", 30, "Bakery", 1, "Card"),
+        row("2026-05-04", -5, "Bakery", 1, "Card"),  # refund
+    ]
+
+    profile = run_profiling(records)
+    cat = profile["category_metrics"]
+
+    assert len(cat["all_categories"]) == 2
+    assert {c["category"] for c in cat["all_categories"]} == {"Coffee", "Bakery"}
+
+    pay = {p["method"]: p for p in profile["payment_breakdown"]}
+    assert pay["Card"]["volume"] == 3
+    assert pay["Cash"]["volume"] == 1
+
+    qty = {q["quantity"]: q for q in profile["quantity_breakdown"]}
+    assert qty[1]["count"] == 3
+    assert qty[2]["count"] == 1
+
+    dist = profile["amount_distribution"]
+    assert any(d["range"] == "Refunds (<$0)" and d["count"] == 1 for d in dist)
+    assert sum(d["count"] for d in dist if d["range"] != "Refunds (<$0)") == 3
+
+
+def test_profiler_new_breakdowns_absent_without_source_columns():
+    """No Payment Method column in the source data -> no payment_breakdown, no crash."""
+    user_id = uuid4()
+    account_id = uuid4()
+    records = [
+        SyncedData(
+            id=uuid4(), user_id=user_id, connected_account_id=account_id,
+            source="google_sheets", external_id="1",
+            raw_payload={"Date": "2026-05-01", "Amount": 100, "Category": "Coffee"}
+        ),
+    ]
+    profile = run_profiling(records)
+    assert profile["payment_breakdown"] == []
+    assert len(profile["quantity_breakdown"]) == 1  # defaults Quantity to 1
