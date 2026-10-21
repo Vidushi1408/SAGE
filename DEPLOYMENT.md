@@ -57,7 +57,7 @@ In the **sage-backend** web service settings under **Environment**, configure th
 
 ## 2. Frontend Deployment (Vercel)
 
-Next.js 15 is optimized for deployment on Vercel.
+Next.js 16 is optimized for deployment on Vercel.
 
 ### Steps to Deploy:
 1. Log in to the [Vercel Dashboard](https://vercel.com/).
