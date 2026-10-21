@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     
     # AI (Claude API)
     ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
+    ANTHROPIC_MODEL: str = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5-5")
 
     # Local LLM (Ollama). LLM_PROVIDER: "ollama" | "anthropic" | "mock" | "" (auto: anthropic if a key is set, else mock)
     LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "").strip().lower()

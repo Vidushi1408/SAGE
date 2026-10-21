@@ -32,7 +32,7 @@ class AIService:
         try:
             client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
             response = client.messages.create(
-                model="claude-3-5-sonnet-20241022",
+                model=settings.ANTHROPIC_MODEL,
                 max_tokens=4000,
                 system=SYSTEM_PROMPT,
                 messages=[

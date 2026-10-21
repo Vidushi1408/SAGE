@@ -20,6 +20,36 @@ def clean_record_dict(d: Dict[str, Any]) -> Dict[str, Any]:
     """Recursively clean dict keys and values."""
     return {k: clean_val(v) for k, v in d.items()}
 
+DRIVER_DAILY_WINDOW = 60  # keep the stored per-day breakdown small
+
+
+def _driver_breakdown(df: pd.DataFrame, dim: str) -> Dict[str, List[Dict[str, Any]]]:
+    """Revenue/transactions per period per value of `dim`; lets chat explain *why* a period moved."""
+    if dim not in df.columns:
+        return {"daily": [], "weekly": [], "monthly": []}
+    work = df[["Date", "Amount", dim]].copy()
+    work[dim] = work[dim].fillna("Unknown").astype(str)
+    labels = {
+        "daily": work["Date"].dt.date.astype(str),
+        "weekly": work["Date"].dt.to_period("W").astype(str),
+        "monthly": work["Date"].dt.to_period("M").astype(str),
+    }
+    out: Dict[str, List[Dict[str, Any]]] = {}
+    for granularity, label in labels.items():
+        grp = work.assign(period=label).groupby(["period", dim]).agg(
+            revenue=("Amount", "sum"), transactions=("Amount", "count")
+        ).reset_index().sort_values("period")
+        if granularity == "daily":
+            keep = sorted(grp["period"].unique())[-DRIVER_DAILY_WINDOW:]
+            grp = grp[grp["period"].isin(keep)]
+        out[granularity] = [
+            {"period": r["period"], "name": r[dim],
+             "revenue": round(float(r["revenue"]), 2), "transactions": int(r["transactions"])}
+            for _, r in grp.iterrows()
+        ]
+    return out
+
+
 def run_profiling(records: List[SyncedData]) -> Dict[str, Any]:
     """
     Given a list of SyncedData records, load into a pandas DataFrame,
@@ -335,6 +365,10 @@ def run_profiling(records: List[SyncedData]) -> Dict[str, Any]:
         "amount_distribution": amount_distribution,
         "anomalies": anomalies,
         "correlations": correlations,
+        "drivers": {
+            "category": _driver_breakdown(df, "Category"),
+            "payment_method": _driver_breakdown(df, "Payment Method"),
+        },
         "data_quality": data_quality
     }
 

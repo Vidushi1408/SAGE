@@ -50,6 +50,19 @@ TOOL_DEFINITIONS = [
         }
     },
     {
+        "name": "explain_change",
+        "description": "Explain WHY revenue moved between two periods: returns the revenue change split into volume vs average-ticket effects, which categories and payment methods contributed most to the change, and any anomalies/refunds in the periods. Use this for 'why did sales drop/rise' questions. Omit period/compare_to to explain the most recent period versus the one before it.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "period_type": {"type": "string", "enum": ["daily", "weekly", "monthly"]},
+                "period": {"type": "string", "description": "Period to explain (e.g. '2026-05' or '2026-05-14'). Defaults to the latest."},
+                "compare_to": {"type": "string", "description": "Period to compare against. Defaults to the one immediately before `period`."}
+            },
+            "required": ["period_type"]
+        }
+    },
+    {
         "name": "compare_periods",
         "description": "Compare revenue and transaction count between two specific periods (e.g. two months, two weeks, or two days).",
         "input_schema": {
@@ -94,6 +107,94 @@ class ChatTools:
             return {"error": f"No data found for {date}. Available dates: {available[:10]}{'...' if len(available) > 10 else ''}"}
         return entry
 
+    PERIOD_KEYS = {"monthly": "month", "weekly": "week", "daily": "date"}
+    TOP_DRIVERS = 3
+
+    def _driver_deltas(self, dimension: str, period_type: str, period: str, base: str, total_change: float) -> List[Dict[str, Any]]:
+        rows = self.stats.get("drivers", {}).get(dimension, {}).get(period_type, [])
+        current = {r["name"]: r for r in rows if r["period"] == period}
+        previous = {r["name"]: r for r in rows if r["period"] == base}
+        deltas = []
+        for name in set(current) | set(previous):
+            cur = current.get(name, {}).get("revenue", 0.0)
+            prev = previous.get(name, {}).get("revenue", 0.0)
+            change = round(cur - prev, 2)
+            if change == 0:
+                continue
+            deltas.append({
+                "name": name,
+                "revenue": cur,
+                "previous_revenue": prev,
+                "change": change,
+                "share_of_total_change_pct": round(change / total_change * 100, 1) if total_change else None,
+            })
+        # Largest movers first, whichever direction they moved
+        deltas.sort(key=lambda d: abs(d["change"]), reverse=True)
+        return deltas[: self.TOP_DRIVERS]
+
+    def explain_change(self, period_type: str, period: Optional[str] = None, compare_to: Optional[str] = None) -> Dict[str, Any]:
+        key = self.PERIOD_KEYS.get(period_type)
+        if not key:
+            return {"error": f"Unknown period_type: {period_type}"}
+        periods = self.stats.get("period_metrics", {}).get(period_type, [])
+        labels = [p.get(key) for p in periods]
+
+        if period is None:
+            if len(periods) < 2:
+                return {"error": f"Need at least two {period_type} periods to explain a change."}
+            period = labels[-1]
+        if period not in labels:
+            return {"error": f"No {period_type} data for {period}. Available: {labels[-10:]}"}
+        if compare_to is None:
+            idx = labels.index(period)
+            if idx == 0:
+                return {"error": f"{period} is the first {period_type} period, so there is nothing earlier to compare against."}
+            compare_to = labels[idx - 1]
+        if compare_to not in labels:
+            return {"error": f"No {period_type} data for {compare_to}. Available: {labels[-10:]}"}
+
+        cur = periods[labels.index(period)]
+        prev = periods[labels.index(compare_to)]
+        change = round(cur["revenue"] - prev["revenue"], 2)
+        change_pct = round(change / prev["revenue"] * 100, 2) if prev["revenue"] else None
+
+        # Split the change into "more/fewer sales" vs "bigger/smaller sales":
+        # volume effect uses the old ticket size, ticket effect uses the new volume.
+        prev_ticket = prev["revenue"] / prev["transactions"] if prev["transactions"] else 0.0
+        cur_ticket = cur["revenue"] / cur["transactions"] if cur["transactions"] else 0.0
+        volume_effect = round((cur["transactions"] - prev["transactions"]) * prev_ticket, 2)
+        ticket_effect = round(change - volume_effect, 2)
+
+        anomalies = [a for a in self.stats.get("anomalies", []) if self._in_period(a.get("date", ""), period_type, period)]
+
+        return {
+            "period": period,
+            "compared_to": compare_to,
+            "revenue": cur["revenue"],
+            "previous_revenue": prev["revenue"],
+            "revenue_change": change,
+            "revenue_change_pct": change_pct,
+            "transactions": cur["transactions"],
+            "previous_transactions": prev["transactions"],
+            "avg_ticket": round(cur_ticket, 2),
+            "previous_avg_ticket": round(prev_ticket, 2),
+            "volume_effect": volume_effect,
+            "ticket_size_effect": ticket_effect,
+            "top_category_drivers": self._driver_deltas("category", period_type, period, compare_to, change),
+            "top_payment_method_drivers": self._driver_deltas("payment_method", period_type, period, compare_to, change),
+            "anomalies_in_period": anomalies[:5],
+        }
+
+    @staticmethod
+    def _in_period(date: str, period_type: str, period: str) -> bool:
+        if period_type == "daily":
+            return date == period
+        if period_type == "monthly":
+            return date.startswith(period)
+        # Weekly labels look like "2026-05-11/2026-05-17"
+        start, _, end = period.partition("/")
+        return bool(end) and start <= date <= end
+
     def compare_periods(self, period_type: str, period_a: str, period_b: str) -> Dict[str, Any]:
         key = {"monthly": "month", "weekly": "week", "daily": "date"}[period_type]
         periods = self.stats.get("period_metrics", {}).get(period_type, [])
@@ -120,6 +221,7 @@ class ChatTools:
             "get_metrics_for_date": self.get_metrics_for_date,
             "list_anomalies": self.list_anomalies,
             "compare_periods": self.compare_periods,
+            "explain_change": self.explain_change,
         }
         fn = dispatch.get(tool_name)
         if not fn:

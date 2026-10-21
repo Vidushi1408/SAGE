@@ -68,7 +68,7 @@ class ChatService:
 
         for _ in range(MAX_TOOL_ITERATIONS):
             response = client.messages.create(
-                model="claude-3-5-sonnet-20241022",
+                model=settings.ANTHROPIC_MODEL,
                 max_tokens=1024,
                 system=CHAT_SYSTEM_PROMPT,
                 tools=TOOL_DEFINITIONS,
@@ -193,6 +193,34 @@ class ChatService:
         return None
 
     @classmethod
+    def _explain_text(cls, r: Dict[str, Any]) -> str:
+        if "error" in r:
+            return r["error"]
+        direction = "rose" if r["revenue_change"] >= 0 else "fell"
+        pct = f" ({r['revenue_change_pct']:+.1f}%)" if r["revenue_change_pct"] is not None else ""
+        text = (
+            f"Revenue {direction} ${abs(r['revenue_change']):,.2f}{pct} in {r['period']} versus {r['compared_to']} "
+            f"(${r['previous_revenue']:,.2f} to ${r['revenue']:,.2f}). "
+        )
+        vol, tick = r["volume_effect"], r["ticket_size_effect"]
+        main = "the number of sales" if abs(vol) >= abs(tick) else "the average sale size"
+        text += (
+            f"Transactions went from {r['previous_transactions']} to {r['transactions']} and the average sale from "
+            f"${r['previous_avg_ticket']:,.2f} to ${r['avg_ticket']:,.2f}, so the change came mostly from {main}. "
+        )
+        cats = r["top_category_drivers"]
+        if cats:
+            c = cats[0]
+            text += f"The biggest category mover was '{c['name']}' ({c['change']:+,.2f}). "
+        pays = r["top_payment_method_drivers"]
+        if pays:
+            text += f"By payment method, '{pays[0]['name']}' moved most ({pays[0]['change']:+,.2f}). "
+        if r["anomalies_in_period"]:
+            a = max(r["anomalies_in_period"], key=lambda x: abs(x["amount"]))
+            text += f"Note a flagged anomaly of ${a['amount']:,.2f} on {a['date']} ({a['reason']}). "
+        return text.strip() + " These are contributing factors visible in your data, not proven causes."
+
+    @classmethod
     def _mock_respond(cls, tools: ChatTools, user_message: str) -> Dict[str, Any]:
         """Deterministic keyword-matched fallback, mirroring AIService's mock-first pattern."""
         msg = user_message.lower()
@@ -210,6 +238,14 @@ class ChatService:
                     f"{result['transactions']} transactions{growth_str}."
                 )
             return {"content": content, "chart": None, "query_used": "get_metrics_for_date", "query_result": result}
+
+        if re.search(r"\bwhy\b|\bwhat (caused|happened)|\bexplain\b|\bdrop|\bdecline|\bdecrease|\bincrease|\bspike", msg):
+            period_type = "monthly" if "month" in msg else "daily" if "day" in msg or "yesterday" in msg else "weekly"
+            result = tools.explain_change(period_type)
+            if "error" in result and period_type != "monthly":
+                period_type, result = "monthly", tools.explain_change("monthly")
+            return {"content": cls._explain_text(result), "chart": None,
+                    "query_used": "explain_change", "query_result": result}
 
         if "categor" in msg:
             result = tools.get_category_breakdown()
