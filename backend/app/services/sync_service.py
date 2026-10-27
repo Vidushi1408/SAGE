@@ -4,7 +4,8 @@ import random
 import zlib
 import logging
 from uuid import UUID
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.core.clock import utcnow
 import pandas as pd
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
@@ -28,7 +29,7 @@ def generate_mock_business_data(sheet_name: str = "Sales"):
     and a few obvious anomalies/outliers for the profiling layer to find.
     """
     data = []
-    base_date = datetime.utcnow() - timedelta(days=90)
+    base_date = utcnow() - timedelta(days=90)
     
     # Each worksheet gets its own (repeatable) dataset so mock mode behaves like a real multi-sheet file.
     is_sales = sheet_name.strip().lower() == "sales"
@@ -99,14 +100,14 @@ def sync_account_sheets(db: Session, account: ConnectedAccount, spreadsheet_id: 
             source="google_sheets",
             external_id=f"{spreadsheet_id}_{sheet_name}_{idx}",
             raw_payload=row,
-            synced_at=datetime.utcnow()
+            synced_at=utcnow()
         ))
 
     account.account_metadata = {
         **(account.account_metadata or {}),
         "connected_spreadsheet_id": spreadsheet_id,
         "connected_sheet_name": sheet_name,
-        "last_synced_at": datetime.utcnow().isoformat(),
+        "last_synced_at": utcnow().isoformat(),
         "rows_synced": len(rows)
     }
     db.commit()
@@ -141,7 +142,7 @@ def ingest_uploaded_file(db: Session, account: ConnectedAccount, df: pd.DataFram
             source="csv_upload",
             external_id=f"upload_{filename}_{idx}",
             raw_payload=row_dict,
-            synced_at=datetime.utcnow()
+            synced_at=utcnow()
         )
         db.add(record)
         rows_synced += 1
@@ -149,7 +150,7 @@ def ingest_uploaded_file(db: Session, account: ConnectedAccount, df: pd.DataFram
     account.account_metadata = {
         **account.account_metadata,
         "last_filename": filename,
-        "last_uploaded_at": datetime.utcnow().isoformat(),
+        "last_uploaded_at": utcnow().isoformat(),
         "rows_synced": rows_synced
     }
     db.commit()

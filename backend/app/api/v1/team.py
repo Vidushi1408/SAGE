@@ -7,6 +7,7 @@ from pydantic import BaseModel, EmailStr, field_validator
 from typing import List, Optional
 from uuid import UUID, uuid4
 from datetime import datetime, timedelta
+from app.core.clock import utcnow
 
 from app.core.db import get_db
 from app.core.config import settings
@@ -72,7 +73,7 @@ def list_team_members(
 def _issue_invite(member: User, inviter: User, db: Session) -> None:
     """(Re)generate the member's invite token and email them the accept link."""
     member.invite_token = secrets.token_urlsafe(32)
-    member.invite_token_expires_at = datetime.utcnow() + timedelta(hours=INVITE_EXPIRE_HOURS)
+    member.invite_token_expires_at = utcnow() + timedelta(hours=INVITE_EXPIRE_HOURS)
     db.commit()
     db.refresh(member)
 
@@ -169,7 +170,7 @@ def accept_invite(payload: AcceptInviteRequest, db: Session = Depends(get_db)):
     """Accept a team invite by setting a name/password and activating the account."""
     member = db.query(User).filter(User.invite_token == payload.token).first()
 
-    if not member or not member.invite_token_expires_at or member.invite_token_expires_at < datetime.utcnow():
+    if not member or not member.invite_token_expires_at or member.invite_token_expires_at < utcnow():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This invite link is invalid or has expired. Ask your admin to send a new one."

@@ -1,6 +1,7 @@
 """Google Sheets/Drive access for a connected account: credentials, listing, and reading rows."""
 import re
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.core.clock import utcnow
 from typing import Any, Dict, List
 
 from fastapi import HTTPException, status
@@ -38,7 +39,7 @@ def get_credentials(account: ConnectedAccount, db: Session) -> Credentials:
         client_id=settings.GOOGLE_CLIENT_ID,
         client_secret=settings.GOOGLE_CLIENT_SECRET,
     )
-    expiring = not account.token_expires_at or datetime.utcnow() >= account.token_expires_at - timedelta(minutes=5)
+    expiring = not account.token_expires_at or utcnow() >= account.token_expires_at - timedelta(minutes=5)
     if expiring or not access_token:
         if not refresh_token:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Google access expired. {RECONNECT}")

@@ -1,7 +1,6 @@
 import pandas as pd
 import numpy as np
 from typing import List, Dict, Any, Tuple
-from datetime import datetime
 from app.models.synced_data import SyncedData
 from app.analytics.column_mapping import map_columns, column_warnings
 from app.analytics.parsing import parse_amount_series
@@ -87,7 +86,7 @@ def run_profiling(records: List[SyncedData]) -> Dict[str, Any]:
 
     # Ensure critical fields exist, or create empty defaults
     if "Date" not in df.columns:
-        df["Date"] = pd.Timestamp.utcnow().date()
+        df["Date"] = pd.Timestamp.now("UTC").date()
     if "Amount" not in df.columns:
         df["Amount"] = 0.0
     if "Quantity" not in df.columns:

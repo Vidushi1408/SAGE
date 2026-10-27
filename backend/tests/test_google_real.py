@@ -1,5 +1,6 @@
 """Real (non-mock) Google Sheets path, with every Google call faked."""
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.core.clock import utcnow
 from types import SimpleNamespace
 from urllib.parse import parse_qs, urlparse
 
@@ -36,7 +37,7 @@ def configured(monkeypatch):
 def fake_flow(scopes, refresh="refresh-tok"):
     class Flow:
         credentials = SimpleNamespace(token="access-tok", refresh_token=refresh,
-                                      expiry=datetime.utcnow() + timedelta(hours=1), scopes=scopes)
+                                      expiry=utcnow() + timedelta(hours=1), scopes=scopes)
         def fetch_token(self, code): assert code == "good-code"
     return Flow()
 
@@ -53,7 +54,7 @@ def real_account(db_session, **kw):
     db_session.query(ConnectedAccount).filter(ConnectedAccount.user_id == user.id, ConnectedAccount.service == "google_sheets").delete()
     acct = ConnectedAccount(user_id=user.id, service="google_sheets", access_token=encrypt_token("access-tok"),
                             refresh_token=encrypt_token("refresh-tok"),
-                            token_expires_at=kw.get("expires", datetime.utcnow() + timedelta(hours=1)),
+                            token_expires_at=kw.get("expires", utcnow() + timedelta(hours=1)),
                             scopes=SHEETS, account_metadata={"email": "owner@gmail.com"})
     db_session.add(acct); db_session.flush()
     return user, acct
@@ -116,10 +117,10 @@ def test_reconnect_keeps_existing_refresh_token_when_google_omits_it(client, db_
 
 
 def test_credentials_refresh_when_expired_and_persist_encrypted(db_session, configured, monkeypatch):
-    _, acct = real_account(db_session, expires=datetime.utcnow() - timedelta(minutes=1))
+    _, acct = real_account(db_session, expires=utcnow() - timedelta(minutes=1))
 
     def fake_refresh(self, request):
-        self.token = "new-access"; self.expiry = datetime.utcnow() + timedelta(hours=1)
+        self.token = "new-access"; self.expiry = utcnow() + timedelta(hours=1)
     monkeypatch.setattr("google.oauth2.credentials.Credentials.refresh", fake_refresh)
     creds = google_sheets.get_credentials(acct, db_session)
     assert creds.token == "new-access"
@@ -128,7 +129,7 @@ def test_credentials_refresh_when_expired_and_persist_encrypted(db_session, conf
 
 def test_credentials_revoked_gives_reconnect_message(db_session, configured, monkeypatch):
     from google.auth.exceptions import RefreshError
-    _, acct = real_account(db_session, expires=datetime.utcnow() - timedelta(minutes=1))
+    _, acct = real_account(db_session, expires=utcnow() - timedelta(minutes=1))
     def deny(self, request): raise RefreshError("invalid_grant")
     monkeypatch.setattr("google.oauth2.credentials.Credentials.refresh", deny)
     with pytest.raises(HTTPException) as e:

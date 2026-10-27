@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from app.core.clock import utcnow
 from sqlalchemy import Column, String, DateTime, ForeignKey, Text
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
@@ -14,6 +14,6 @@ class ChatHistory(Base):
     content = Column(Text, nullable=False)
     query_used = Column(Text, nullable=True)  # stores safe pandas query executed
     query_result = Column(JSONB, nullable=True)  # stores result of pandas execution
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     user = relationship("User", back_populates="chat_histories")

@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from app.core.clock import utcnow
 from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
@@ -22,8 +22,8 @@ class User(Base):
     invite_token_expires_at = Column(DateTime, nullable=True)
     password_reset_token = Column(String, nullable=True, unique=True)
     password_reset_expires_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     # Relationships
     workspace_owner = relationship("User", remote_side=[id], backref="team_members")

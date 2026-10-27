@@ -1,5 +1,6 @@
 import pytest
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.core.clock import utcnow
 from uuid import uuid4
 
 from app.models.user import User
@@ -66,7 +67,7 @@ def test_reset_password_rejects_expired_token(client, db_session, monkeypatch):
     client.post("/api/v1/auth/forgot-password", json={"email": email})
 
     user = db_session.query(User).filter(User.email == email).first()
-    user.password_reset_expires_at = datetime.utcnow() - timedelta(minutes=1)
+    user.password_reset_expires_at = utcnow() - timedelta(minutes=1)
     db_session.commit()
 
     reset_res = client.post(

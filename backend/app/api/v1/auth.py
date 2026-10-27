@@ -1,5 +1,6 @@
 import secrets
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.core.clock import utcnow
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
@@ -147,7 +148,7 @@ def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db
     if user:
         token = secrets.token_urlsafe(32)
         user.password_reset_token = token
-        user.password_reset_expires_at = datetime.utcnow() + timedelta(minutes=PASSWORD_RESET_EXPIRE_MINUTES)
+        user.password_reset_expires_at = utcnow() + timedelta(minutes=PASSWORD_RESET_EXPIRE_MINUTES)
         db.commit()
 
         reset_url = f"{settings.FRONTEND_URL}/reset-password?token={token}"
@@ -170,7 +171,7 @@ def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db))
     """Reset a user's password using a valid reset token."""
     user = db.query(User).filter(User.password_reset_token == payload.token).first()
 
-    if not user or not user.password_reset_expires_at or user.password_reset_expires_at < datetime.utcnow():
+    if not user or not user.password_reset_expires_at or user.password_reset_expires_at < utcnow():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This reset link is invalid or has expired. Please request a new one."

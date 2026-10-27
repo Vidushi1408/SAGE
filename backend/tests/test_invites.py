@@ -1,5 +1,6 @@
 import pytest
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.core.clock import utcnow
 from uuid import uuid4
 
 from app.models.user import User
@@ -34,7 +35,7 @@ def test_invite_sends_email_and_creates_inactive_user(client, db_session, monkey
 
     invited_user = db_session.query(User).filter(User.email == member_email).first()
     assert invited_user.invite_token is not None
-    assert invited_user.invite_token_expires_at > datetime.utcnow()
+    assert invited_user.invite_token_expires_at > utcnow()
 
     # Cannot log in before accepting the invite
     blocked_login = client.post(
@@ -84,7 +85,7 @@ def test_accept_invite_rejects_expired_token(client, db_session, monkeypatch):
     client.post("/api/v1/team/invite", headers=headers, json={"email": member_email, "role": "viewer"})
 
     invited_user = db_session.query(User).filter(User.email == member_email).first()
-    invited_user.invite_token_expires_at = datetime.utcnow() - timedelta(hours=1)
+    invited_user.invite_token_expires_at = utcnow() - timedelta(hours=1)
     db_session.commit()
 
     accept_res = client.post(

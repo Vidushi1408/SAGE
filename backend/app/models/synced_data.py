@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from app.core.clock import utcnow
 from sqlalchemy import Column, String, DateTime, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
@@ -14,7 +14,7 @@ class SyncedData(Base):
     source = Column(String, nullable=False)  # 'google_sheets', 'razorpay'
     external_id = Column(String, nullable=False)  # e.g., 'sheet_id_row_5' or Razorpay payment ID
     raw_payload = Column(JSONB, nullable=False)
-    synced_at = Column(DateTime, default=datetime.utcnow)
+    synced_at = Column(DateTime, default=utcnow)
 
     user = relationship("User", back_populates="synced_data")
     connected_account = relationship("ConnectedAccount", back_populates="synced_records")

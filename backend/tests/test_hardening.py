@@ -3,6 +3,7 @@ import os
 import subprocess
 import sys
 from datetime import datetime, timedelta
+from app.core.clock import utcnow
 from uuid import uuid4
 
 import pytest
@@ -128,7 +129,7 @@ def test_resend_invite_after_expiry_then_accept(client, db_session):
     email = f"late_{uuid4()}@company.com"
     client.post("/api/v1/team/invite", headers=owner_h, json={"email": email, "role": "analyst"})
     member = db_session.query(User).filter(User.email == email).first()
-    member.invite_token_expires_at = datetime.utcnow() - timedelta(hours=1)
+    member.invite_token_expires_at = utcnow() - timedelta(hours=1)
     db_session.commit()
     old_token = member.invite_token
     assert client.post("/api/v1/team/accept-invite", json={"token": old_token, "name": "x", "password": "memberpass"}).status_code == 400
@@ -136,7 +137,7 @@ def test_resend_invite_after_expiry_then_accept(client, db_session):
     res = client.post(f"/api/v1/team/{member.id}/resend-invite", headers=owner_h)
     assert res.status_code == 200
     db_session.refresh(member)
-    assert member.invite_token != old_token and member.invite_token_expires_at > datetime.utcnow()
+    assert member.invite_token != old_token and member.invite_token_expires_at > utcnow()
     assert client.post("/api/v1/team/accept-invite", json={"token": member.invite_token, "name": "x", "password": "memberpass"}).status_code == 200
 
 
@@ -188,8 +189,8 @@ def test_prune_history_keeps_newest_only(db_session):
     db_session.add(user)
     db_session.commit()
     for i in range(5):
-        db_session.add(Insight(user_id=user.id, insight_data={"n": i}, created_at=datetime.utcnow() + timedelta(seconds=i)))
-        db_session.add(ComputedStat(user_id=user.id, metrics={"n": i}, created_at=datetime.utcnow() + timedelta(seconds=i)))
+        db_session.add(Insight(user_id=user.id, insight_data={"n": i}, created_at=utcnow() + timedelta(seconds=i)))
+        db_session.add(ComputedStat(user_id=user.id, metrics={"n": i}, created_at=utcnow() + timedelta(seconds=i)))
     db_session.commit()
 
     prune_history(db_session, user.id, keep=2)

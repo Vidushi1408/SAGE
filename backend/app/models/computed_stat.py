@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from app.core.clock import utcnow
 from sqlalchemy import Column, DateTime, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
@@ -13,6 +13,6 @@ class ComputedStat(Base):
     metrics = Column(JSONB, nullable=False)  # holds totals, growth %, anomalies, correlations
     period_start = Column(DateTime, nullable=True)
     period_end = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     user = relationship("User", back_populates="computed_stats")

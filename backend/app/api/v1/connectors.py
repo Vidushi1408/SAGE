@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, HttpUrl, field_validator
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.core.clock import utcnow
 import urllib.parse
 import json
 import io
@@ -134,20 +135,20 @@ def google_callback(
     # Mock mode only when Google isn't configured (never a bypass in production)
     if not google_configured():
         meta = {"email": "demo-account@gmail.com", "name": "Sage Coffee Shop Demo Account",
-                "connected_at": datetime.utcnow().isoformat()}
+                "connected_at": utcnow().isoformat()}
         account = _google_account(db, user_id)
         if not account:
             account = ConnectedAccount(
                 user_id=user_id, service="google_sheets",
                 access_token="mock_access_token", refresh_token="mock_refresh_token",
-                token_expires_at=datetime.utcnow() + timedelta(hours=24),
+                token_expires_at=utcnow() + timedelta(hours=24),
                 scopes=" ".join(GOOGLE_SCOPES), account_metadata=meta
             )
             db.add(account)
         else:
             account.access_token = "mock_access_token"
             account.refresh_token = "mock_refresh_token"
-            account.token_expires_at = datetime.utcnow() + timedelta(hours=24)
+            account.token_expires_at = utcnow() + timedelta(hours=24)
             account.account_metadata = meta
         db.commit()
         return _back_to_app("/dashboard", connected="google_sheets", mock="true")
@@ -166,7 +167,7 @@ def google_callback(
         meta = {
             "email": info.get("email", "unknown"),
             "name": info.get("name", "Google account"),
-            "connected_at": datetime.utcnow().isoformat(),
+            "connected_at": utcnow().isoformat(),
             "can_list_drive": "https://www.googleapis.com/auth/drive.metadata.readonly" in granted,
         }
 
@@ -376,7 +377,7 @@ def connect_slack(
             user_id=owner_id,
             service="slack",
             access_token=webhook_url_str,
-            account_metadata={"connected_at": datetime.utcnow().isoformat()}
+            account_metadata={"connected_at": utcnow().isoformat()}
         )
         db.add(account)
     else:

@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from app.core.clock import utcnow
 from sqlalchemy import Column, String, DateTime, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
@@ -16,8 +16,8 @@ class ConnectedAccount(Base):
     token_expires_at = Column(DateTime, nullable=True)
     scopes = Column(String, nullable=True)
     account_metadata = Column(JSONB, default={}, nullable=False)  # holds sheet_id, title, etc.
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     user = relationship("User", back_populates="connected_accounts")
     synced_records = relationship("SyncedData", back_populates="connected_account", cascade="all, delete-orphan")

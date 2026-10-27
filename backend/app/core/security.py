@@ -1,6 +1,7 @@
 import bcrypt
 import hashlib
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.core.clock import utcnow
 from typing import Union, Any
 from jose import jwt, JWTError
 from app.core.config import settings
@@ -48,9 +49,9 @@ def password_fingerprint(hashed_password: str) -> str:
 def create_access_token(subject: Union[str, Any], expires_delta: timedelta = None, pw_fingerprint: str = None) -> str:
     """Create a signed JWT token."""
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = utcnow() + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(
+        expire = utcnow() + timedelta(
             minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
         )
     to_encode = {"exp": expire, "sub": str(subject)}
@@ -64,7 +65,7 @@ def create_oauth_state(owner_id: Any, minutes: int = 10) -> str:
     payload = {
         "uid": str(owner_id),
         "purpose": "oauth_state",
-        "exp": datetime.utcnow() + timedelta(minutes=minutes),
+        "exp": utcnow() + timedelta(minutes=minutes),
     }
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
