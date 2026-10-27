@@ -47,7 +47,8 @@ In the **sage-backend** web service settings under **Environment**, configure th
 | `GOOGLE_CLIENT_ID` | Google OAuth Client ID (leave empty to use Mock connection) | `123456-abc.apps.googleusercontent.com` |
 | `GOOGLE_CLIENT_SECRET`| Google OAuth Client Secret (leave empty for Mock connection) | `GOCSPX-...` |
 | `GOOGLE_REDIRECT_URI` | Production redirect callback URL (update with your Render URL) | `https://sage-backend.onrender.com/api/v1/connectors/google/callback` |
-| `LLM_PROVIDER` | `ollama`, `anthropic` or `mock`. Empty = Anthropic if a key is set, else mock. Ollama is a local server, so on Render use Anthropic/mock unless you host Ollama yourself | *(empty)* |
+| `CORS_ORIGINS` | Your Vercel frontend URL(s), comma-separated, no trailing slash. **Required**: without it the browser blocks every API call from the deployed site | `https://sage-app.vercel.app` |
+| `LLM_PROVIDER` | `ollama`, `anthropic` or `mock`. Empty = Anthropic if a key is set, else mock. If set to `anthropic` with no `ANTHROPIC_API_KEY`, SAGE falls back to mock instead of erroring. Ollama is a local server, so on Render use Anthropic/mock unless you host Ollama yourself | *(empty)* |
 | `OLLAMA_BASE_URL` / `OLLAMA_MODEL` | Where Ollama runs and which model to use (`ollama pull llama3.2:3b`) | `http://localhost:11434` / `llama3.2:3b` |
 | `SYNC_INTERVAL_MINUTES` | Frequency of background spreadsheet checks (in minutes) | `30` |
 | `RESEND_API_KEY` | Your Resend API key for transactional email (leave empty to use Mock Email mode) | `re_...` |

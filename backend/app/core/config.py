@@ -37,9 +37,14 @@ class Settings(BaseSettings):
 
     @property
     def active_llm(self) -> str:
-        if self.LLM_PROVIDER in ("ollama", "anthropic", "mock"):
+        has_key = bool(self.ANTHROPIC_API_KEY.strip())
+        if self.LLM_PROVIDER == "anthropic":
+            # Asked for Claude but no key (e.g. a fresh deploy): degrade to the built-in mock
+            # rather than failing every insight and chat message.
+            return "anthropic" if has_key else "mock"
+        if self.LLM_PROVIDER in ("ollama", "mock"):
             return self.LLM_PROVIDER
-        return "anthropic" if self.ANTHROPIC_API_KEY.strip() else "mock"
+        return "anthropic" if has_key else "mock"
 
     # Scheduled Ingestion
     SYNC_INTERVAL_MINUTES: int = int(os.getenv("SYNC_INTERVAL_MINUTES", "30"))

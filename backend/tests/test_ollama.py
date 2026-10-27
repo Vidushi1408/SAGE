@@ -26,6 +26,23 @@ def test_active_llm_selection(monkeypatch):
     assert settings.active_llm == "ollama"
 
 
+def test_explicit_anthropic_without_key_falls_back_to_mock(monkeypatch):
+    monkeypatch.setattr(settings, "LLM_PROVIDER", "anthropic")
+    monkeypatch.setattr(settings, "ANTHROPIC_API_KEY", "")
+    assert settings.active_llm == "mock"
+    monkeypatch.setattr(settings, "ANTHROPIC_API_KEY", "   ")
+    assert settings.active_llm == "mock"
+    monkeypatch.setattr(settings, "ANTHROPIC_API_KEY", "sk-test")
+    assert settings.active_llm == "anthropic"
+
+
+def test_chat_and_insights_work_with_anthropic_provider_but_no_key(monkeypatch):
+    monkeypatch.setattr(settings, "LLM_PROVIDER", "anthropic")
+    monkeypatch.setattr(settings, "ANTHROPIC_API_KEY", "")
+    assert "$1,000.00" in ChatService.respond(STATS, "what is my total revenue?")["content"]
+    assert AIService.generate_insights(STATS)["insights"]
+
+
 def test_chat_uses_tool_result_from_ollama(monkeypatch):
     use_ollama(monkeypatch)
     replies = iter([
