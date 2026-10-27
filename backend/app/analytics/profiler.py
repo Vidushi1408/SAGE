@@ -95,7 +95,8 @@ def run_profiling(records: List[SyncedData]) -> Dict[str, Any]:
 
     # Coerce data types
     raw_amount = df["Amount"]
-    df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+    # format="mixed": pandas 3 otherwise locks onto the first row's format and drops every row written differently.
+    df["Date"] = pd.to_datetime(df["Date"], errors="coerce", format="mixed")
     df["Amount"] = parse_amount_series(df["Amount"])
     unreadable_amounts = int((df["Amount"].isna() & raw_amount.notna() & (raw_amount.astype(str).str.strip() != "")).sum())
     if unreadable_amounts:
