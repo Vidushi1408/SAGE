@@ -70,3 +70,22 @@ export function Alert({ tone, children }: { tone: "error" | "success" | "warning
   }[tone];
   return <div role={tone === "error" ? "alert" : "status"} className={`p-4 rounded-xl border text-xs ${styles}`}>{children}</div>;
 }
+
+const TOOL_LABELS: Record<string, string> = {
+  get_summary: "revenue summary",
+  get_category_breakdown: "category breakdown",
+  get_period_metrics: "revenue by period",
+  get_metrics_for_date: "single-day figures",
+  list_anomalies: "flagged anomalies",
+  explain_change: "change analysis",
+  compare_periods: "period comparison",
+  get_driver_trend: "category / payment trend",
+  best_and_worst_periods: "best and worst periods",
+  forecast_next_period: "trend projection",
+};
+
+/** "Based on: revenue by period, trend projection" for an assistant answer; empty when nothing was looked up. */
+export function describeSources(tools: string[] | undefined): string {
+  const labels = [...new Set((tools ?? []).map(t => TOOL_LABELS[t]).filter(Boolean))];
+  return labels.length ? `Based on: ${labels.join(", ")}` : "";
+}

@@ -13,7 +13,7 @@ from app.services.chat_tools import ChatTools, TOOL_DEFINITIONS
 
 logger = logging.getLogger("sage.chat")
 
-MAX_TOOL_ITERATIONS = 4
+MAX_TOOL_ITERATIONS = 6  # enough to chain e.g. summary -> explain_change -> driver trend, but still bounded
 
 # Tools whose result is naturally chartable; used to opportunistically attach
 # a chart to the chat response, in the same {title, chart_type, chart_data} shape
@@ -53,7 +53,8 @@ class ChatService:
                 "content": "I ran into an error looking that up. Please try rephrasing your question.",
                 "chart": None,
                 "query_used": None,
-                "query_result": None
+                "query_result": None,
+                "tools_used": [],
             }
 
     @classmethod
@@ -65,6 +66,7 @@ class ChatService:
         last_tool_name = None
         last_tool_input = None
         last_tool_result = None
+        used: List[str] = []
 
         for _ in range(MAX_TOOL_ITERATIONS):
             response = client.messages.create(
@@ -82,7 +84,8 @@ class ChatService:
                     "content": text.strip() or "I don't have a clear answer for that yet.",
                     "chart": chart,
                     "query_used": last_tool_name,
-                    "query_result": last_tool_result
+                    "query_result": last_tool_result,
+                    "tools_used": used,
                 }
 
             # Execute every tool_use block, append results, and loop back to the model
@@ -95,6 +98,7 @@ class ChatService:
                 last_tool_name = block.name
                 last_tool_input = block.input
                 last_tool_result = tools.call(block.name, block.input)
+                cls._note_tool(used, block.name)
                 tool_results.append({
                     "type": "tool_result",
                     "tool_use_id": block.id,
@@ -107,8 +111,14 @@ class ChatService:
             "content": "I looked into a few angles on this but couldn't settle on a confident answer. Could you narrow the question down?",
             "chart": None,
             "query_used": last_tool_name,
-            "query_result": last_tool_result
+            "query_result": last_tool_result,
+            "tools_used": used,
         }
+
+    @staticmethod
+    def _note_tool(used: List[str], name: Optional[str]) -> None:
+        if name and name not in used:
+            used.append(name)
 
     @classmethod
     def _ollama_respond(cls, tools: ChatTools, user_message: str, history: List[Dict[str, str]]) -> Dict[str, Any]:
@@ -124,6 +134,7 @@ class ChatService:
             tool_specs = ollama.to_ollama_tools(TOOL_DEFINITIONS)
 
             last_name = last_result = None
+            used: List[str] = []
             for _ in range(MAX_TOOL_ITERATIONS):
                 reply = ollama.chat(messages, tools=tool_specs)
                 calls = reply.get("tool_calls") or []
@@ -133,13 +144,14 @@ class ChatService:
                     text = (reply.get("content") or "").strip()
                     return {"content": text or "I don't have a clear answer for that yet.",
                             "chart": cls._build_chart(last_name, last_result),
-                            "query_used": last_name, "query_result": last_result}
+                            "query_used": last_name, "query_result": last_result, "tools_used": used}
                 messages.append(reply)
                 for call in calls:
                     fn = call.get("function", {})
                     last_name = fn.get("name")
                     args = fn.get("arguments") or {}
                     last_result = tools.call(last_name, args if isinstance(args, dict) else {})
+                    cls._note_tool(used, last_name)
                     messages.append({"role": "tool", "content": json.dumps(last_result, default=str)})
             return cls._mock_respond(tools, user_message)
         except Exception as e:
@@ -222,6 +234,91 @@ class ChatService:
 
     @classmethod
     def _mock_respond(cls, tools: ChatTools, user_message: str) -> Dict[str, Any]:
+        result = cls._route_mock(tools, user_message)
+        result["tools_used"] = [result["query_used"]] if result.get("query_used") else []
+        return result
+
+    @staticmethod
+    def _period_from_message(msg: str, default: str = "weekly") -> str:
+        if "month" in msg:
+            return "monthly"
+        if re.search(r"\bday\b|\bdaily\b|yesterday|today", msg):
+            return "daily"
+        if "week" in msg:
+            return "weekly"
+        return default
+
+    @staticmethod
+    def _first_working(period_type: str, call) -> tuple:
+        """Try the requested granularity, then the others, until one has enough data."""
+        order = [period_type] + [p for p in ("monthly", "weekly", "daily") if p != period_type]
+        result: Dict[str, Any] = {"error": "No data available."}
+        for candidate in order:
+            result = call(candidate)
+            if "error" not in result:
+                return candidate, result
+        return period_type, result
+
+    @classmethod
+    def _forecast_text(cls, r: Dict[str, Any]) -> str:
+        if "error" in r:
+            return r["error"]
+        unit = {"daily": "day", "weekly": "week", "monthly": "month"}[r["period_type"]]
+        direction = "upward" if r["trend_per_period"] > 0 else "downward" if r["trend_per_period"] < 0 else "flat"
+        return (
+            f"If the recent trend continues, the next {unit} ({r['projected_period']}) lands around "
+            f"${r['projected_revenue']:,.2f}, versus ${r['last_period_revenue']:,.2f} in {r['last_period']}. "
+            f"That's a {direction} trend of ${abs(r['trend_per_period']):,.2f} per {unit} across the last "
+            f"{len(r['based_on_periods'])} {unit}s, with a {r['trend_fit']} fit (R\u00b2 {r['r_squared']}). "
+            "This is a rough projection from your own history, not a guarantee."
+        )
+
+    @classmethod
+    def _best_worst_text(cls, r: Dict[str, Any]) -> str:
+        if "error" in r:
+            return r["error"]
+        unit = {"daily": "day", "weekly": "week", "monthly": "month"}[r["period_type"]]
+        latest = r["latest"]
+        text = (
+            f"Your best {unit} was {r['best']['period']} with ${r['best']['revenue']:,.2f}, and your weakest was "
+            f"{r['worst']['period']} with ${r['worst']['revenue']:,.2f}. The average is ${r['average_revenue']:,.2f} "
+            f"across {r['periods_analysed']} {unit}s."
+        )
+        if latest["vs_average_pct"] is not None:
+            text += f" The latest ({latest['period']}) is {latest['vs_average_pct']:+.1f}% versus that average."
+        return text + " The most recent period may not be complete yet."
+
+    @classmethod
+    def _driver_trend_text(cls, r: Dict[str, Any]) -> str:
+        if "error" in r:
+            return r["error"]
+        pct = f" ({r['change_pct']:+.1f}%)" if r["change_pct"] is not None else ""
+        direction = "up" if r["change"] > 0 else "down" if r["change"] < 0 else "flat"
+        return (
+            f"'{r['name']}' went from ${r['series'][0]['revenue']:,.2f} in {r['first_period']} to "
+            f"${r['series'][-1]['revenue']:,.2f} in {r['last_period']}: {direction} ${abs(r['change']):,.2f}{pct} "
+            f"over {len(r['series'])} {r['period_type']} periods."
+        )
+
+    @staticmethod
+    def _driver_names(tools: ChatTools) -> List[tuple]:
+        """(dimension, name) pairs present in the data, longest names first so 'Iced Coffee' wins over 'Coffee'."""
+        found = {}
+        for dimension, by_period in tools.stats.get("drivers", {}).items():
+            for rows in by_period.values():
+                for r in rows:
+                    found[(dimension, r["name"])] = True
+        return sorted(found, key=lambda dn: len(dn[1]), reverse=True)
+
+    @classmethod
+    def _driver_trend_chart(cls, r: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        if "error" in r or len(r["series"]) < 2:
+            return None
+        return {"title": f"{r['name']} revenue", "chart_type": "line",
+                "chart_data": [{"name": p["period"], "value": p["revenue"]} for p in r["series"]]}
+
+    @classmethod
+    def _route_mock(cls, tools: ChatTools, user_message: str) -> Dict[str, Any]:
         """Deterministic keyword-matched fallback, mirroring AIService's mock-first pattern."""
         msg = user_message.lower()
 
@@ -239,6 +336,11 @@ class ChatService:
                 )
             return {"content": content, "chart": None, "query_used": "get_metrics_for_date", "query_result": result}
 
+        if re.search(r"forecast|predict|project(ed|ion)|next (day|week|month)|where am i (going|heading)|going to (make|earn|bring)|expect", msg):
+            period_type, result = cls._first_working(cls._period_from_message(msg, "monthly"), tools.forecast_next_period)
+            return {"content": cls._forecast_text(result), "chart": None,
+                    "query_used": "forecast_next_period", "query_result": result}
+
         if re.search(r"\bwhy\b|\bwhat (caused|happened)|\bexplain\b|\bdrop|\bdecline|\bdecrease|\bincrease|\bspike", msg):
             period_type = "monthly" if "month" in msg else "daily" if "day" in msg or "yesterday" in msg else "weekly"
             result = tools.explain_change(period_type)
@@ -246,6 +348,19 @@ class ChatService:
                 period_type, result = "monthly", tools.explain_change("monthly")
             return {"content": cls._explain_text(result), "chart": None,
                     "query_used": "explain_change", "query_result": result}
+
+        if re.search(r"\b(best|worst|highest|lowest|biggest|weakest|strongest|peak|slowest)\b", msg) and re.search(r"\b(day|week|month)s?\b", msg):
+            period_type, result = cls._first_working(cls._period_from_message(msg), tools.best_and_worst_periods)
+            return {"content": cls._best_worst_text(result), "chart": None,
+                    "query_used": "best_and_worst_periods", "query_result": result}
+
+        for dimension, name in cls._driver_names(tools):
+            if re.search(rf"\b{re.escape(name.lower())}\b", msg):
+                period_type, result = cls._first_working(
+                    cls._period_from_message(msg, "monthly"),
+                    lambda p: tools.get_driver_trend(dimension, name, p))
+                return {"content": cls._driver_trend_text(result), "chart": cls._driver_trend_chart(result),
+                        "query_used": "get_driver_trend", "query_result": result}
 
         if "categor" in msg:
             result = tools.get_category_breakdown()

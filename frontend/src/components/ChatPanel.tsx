@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import api, { ChatMessage, errorMessage } from "../lib/api";
 import { MessageCircle, X, Send, Sparkles } from "lucide-react";
 import InsightChart from "./InsightChart";
+import { describeSources } from "./ui";
 
 export default function ChatPanel() {
   const [open, setOpen] = useState(false);
@@ -81,6 +82,9 @@ export default function ChatPanel() {
                   }`}
                 >
                   <p>{m.content}</p>
+                  {m.role === "assistant" && describeSources(m.tools_used) && (
+                    <p className="mt-1.5 text-[10px] text-[#8a7d78]">{describeSources(m.tools_used)}</p>
+                  )}
                   {m.chart && (
                     <div className="mt-2 -mx-1">
                       <InsightChart insight={m.chart} idx={idx} />

@@ -50,6 +50,15 @@ describe("AskPage", () => {
     expect(mocked.sendChatMessage).toHaveBeenCalledWith("Are there any anomalies?");
   });
 
+  it("shows which data an answer was based on", async () => {
+    mocked.sendChatMessage.mockResolvedValue({ role: "assistant", content: "About $800.", tools_used: ["forecast_next_period"] } as never);
+    render(<AskPage />);
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Your question"), "next month?");
+    await user.click(screen.getByRole("button", { name: "Send" }));
+    expect(await screen.findByText("Based on: trend projection")).toBeInTheDocument();
+  });
+
   it("renders a chart attached to an answer", async () => {
     mocked.sendChatMessage.mockResolvedValue({ role: "assistant", content: "Trend", chart: { chart_type: "line", chart_data: [] } } as never);
     render(<AskPage />);

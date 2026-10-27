@@ -38,7 +38,8 @@ def get_chat_history(
     ).order_by(ChatHistory.created_at.asc()).limit(limit).all()
 
     return {"history": [
-        {"id": r.id, "role": r.role, "content": r.content, "created_at": r.created_at}
+        {"id": r.id, "role": r.role, "content": r.content, "created_at": r.created_at,
+         "tools_used": [r.query_used] if r.query_used else []}
         for r in records
     ]}
 
@@ -90,5 +91,6 @@ def send_chat_message(
         "role": "assistant",
         "content": assistant_turn.content,
         "chart": result.get("chart"),
+        "tools_used": result.get("tools_used", []),
         "created_at": assistant_turn.created_at
     }

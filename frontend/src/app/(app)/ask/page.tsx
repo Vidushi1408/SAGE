@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Send, Sparkles } from "lucide-react";
 import api, { ChatMessage, errorMessage } from "../../../lib/api";
 import InsightChart from "../../../components/InsightChart";
-import { PageHeader } from "../../../components/ui";
+import { PageHeader, describeSources } from "../../../components/ui";
 import { useWorkspace } from "../../../components/workspace/WorkspaceProvider";
 
 const SUGGESTIONS = [
@@ -12,7 +12,9 @@ const SUGGESTIONS = [
   "Which category sells the most?",
   "Are there any anomalies?",
   "How did last week go?",
-  "Show me the monthly trend"
+  "Why did sales change recently?",
+  "What was my best month?",
+  "What will next month look like?"
 ];
 
 export default function AskPage() {
@@ -75,6 +77,9 @@ export default function AskPage() {
             <div key={idx} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
               <div className={`max-w-[85%] sm:max-w-[70%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${m.role === "user" ? "bg-[#9c6b3f] text-white" : "bg-[#efe8d8] border border-[#e6ddc9] text-[#5c5052]"}`}>
                 <p className="whitespace-pre-wrap">{m.content}</p>
+                {m.role === "assistant" && describeSources(m.tools_used) && (
+                  <p className="mt-2 text-[11px] text-[#8a7d78]">{describeSources(m.tools_used)}</p>
+                )}
                 {m.chart && <div className="mt-3 -mx-1"><InsightChart insight={m.chart} idx={idx} /></div>}
               </div>
             </div>

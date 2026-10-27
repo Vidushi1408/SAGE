@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { formatMoney, parseServerDate, timeAgo } from "./ui";
+import { describeSources, formatMoney, parseServerDate, timeAgo } from "./ui";
 
 afterEach(() => vi.useRealTimers());
 
@@ -22,5 +22,13 @@ describe("ui helpers", () => {
   it("formats money with two decimals", () => {
     expect(formatMoney(1234.5)).toBe("$1,234.50");
     expect(formatMoney(undefined)).toBe("$0.00");
+  });
+
+  it("describes which lookups backed an answer, without duplicates or unknown tools", () => {
+    expect(describeSources(["get_period_metrics", "forecast_next_period", "get_period_metrics"]))
+      .toBe("Based on: revenue by period, trend projection");
+    expect(describeSources(["mystery_tool"])).toBe("");
+    expect(describeSources(undefined)).toBe("");
+    expect(describeSources([])).toBe("");
   });
 });

@@ -40,6 +40,8 @@ export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   chart?: InsightObject | null;
+  /** Names of the data lookups that backed an assistant answer, in the order they ran. */
+  tools_used?: string[];
   created_at?: string;
 }
 

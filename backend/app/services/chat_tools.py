@@ -4,6 +4,7 @@ computed statistics. Deliberately NOT a text-to-pandas/eval interface: every too
 is a fixed, parameterized function over the already-computed_stats JSON, so the
 model can only ever read data shapes we control -- never execute arbitrary code.
 """
+from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 TOOL_DEFINITIONS = [
@@ -59,6 +60,37 @@ TOOL_DEFINITIONS = [
                 "period": {"type": "string", "description": "Period to explain (e.g. '2026-05' or '2026-05-14'). Defaults to the latest."},
                 "compare_to": {"type": "string", "description": "Period to compare against. Defaults to the one immediately before `period`."}
             },
+            "required": ["period_type"]
+        }
+    },
+    {
+        "name": "get_driver_trend",
+        "description": "Show how ONE category or payment method has performed over time (revenue and transactions per period, plus its overall change). Use for 'how is Coffee doing', 'is cash use growing', 'trend for the Bakery category'.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "dimension": {"type": "string", "enum": ["category", "payment_method"]},
+                "name": {"type": "string", "description": "The category or payment method name, e.g. 'Coffee' or 'Card'."},
+                "period_type": {"type": "string", "enum": ["daily", "weekly", "monthly"]}
+            },
+            "required": ["dimension", "name", "period_type"]
+        }
+    },
+    {
+        "name": "best_and_worst_periods",
+        "description": "Find the highest- and lowest-revenue periods (day, week or month) and the average, to answer 'what was my best month', 'worst day', 'how do I compare to my average'.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"period_type": {"type": "string", "enum": ["daily", "weekly", "monthly"]}},
+            "required": ["period_type"]
+        }
+    },
+    {
+        "name": "forecast_next_period",
+        "description": "Project revenue for the NEXT period by extending the recent linear trend. A rough projection, not a guarantee: the result states how many periods it is based on and how well the trend fits. Use for 'what will next month look like', 'where am I heading'.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"period_type": {"type": "string", "enum": ["daily", "weekly", "monthly"]}},
             "required": ["period_type"]
         }
     },
@@ -185,6 +217,124 @@ class ChatTools:
             "anomalies_in_period": anomalies[:5],
         }
 
+    FORECAST_WINDOW = 6
+    FORECAST_MIN_PERIODS = 3
+
+    def best_and_worst_periods(self, period_type: str) -> Dict[str, Any]:
+        key = self.PERIOD_KEYS.get(period_type)
+        if not key:
+            return {"error": f"Unknown period_type: {period_type}"}
+        periods = self.stats.get("period_metrics", {}).get(period_type, [])
+        if not periods:
+            return {"error": f"No {period_type} data available."}
+        best = max(periods, key=lambda p: p["revenue"])
+        worst = min(periods, key=lambda p: p["revenue"])
+        average = sum(p["revenue"] for p in periods) / len(periods)
+        latest = periods[-1]
+        return {
+            "period_type": period_type,
+            "periods_analysed": len(periods),
+            "best": {"period": best[key], "revenue": best["revenue"], "transactions": best["transactions"]},
+            "worst": {"period": worst[key], "revenue": worst["revenue"], "transactions": worst["transactions"]},
+            "average_revenue": round(average, 2),
+            "latest": {"period": latest[key], "revenue": latest["revenue"],
+                       "vs_average_pct": round((latest["revenue"] - average) / average * 100, 1) if average else None},
+            "note": "The most recent period may be only partly complete, which can make it look like the worst.",
+        }
+
+    def get_driver_trend(self, dimension: str, name: str, period_type: str) -> Dict[str, Any]:
+        if dimension not in ("category", "payment_method"):
+            return {"error": f"Unknown dimension: {dimension}"}
+        if period_type not in self.PERIOD_KEYS:
+            return {"error": f"Unknown period_type: {period_type}"}
+        rows = self.stats.get("drivers", {}).get(dimension, {}).get(period_type, [])
+        names = sorted({r["name"] for r in rows})
+        match = next((n for n in names if n.lower() == name.strip().lower()), None)
+        if match is None:
+            hint = f"Available: {names}" if names else f"No {dimension} breakdown exists in this data."
+            return {"error": f"No {dimension} called '{name}'. {hint}"}
+        series = sorted(
+            ({"period": r["period"], "revenue": r["revenue"], "transactions": r["transactions"]}
+             for r in rows if r["name"] == match),
+            key=lambda r: r["period"],
+        )
+        first, last = series[0], series[-1]
+        change = round(last["revenue"] - first["revenue"], 2)
+        return {
+            "dimension": dimension,
+            "name": match,
+            "period_type": period_type,
+            "series": series,
+            "first_period": first["period"],
+            "last_period": last["period"],
+            "change": change,
+            "change_pct": round(change / first["revenue"] * 100, 1) if first["revenue"] else None,
+            "note": "Periods where this had no sales are omitted.",
+        }
+
+    @staticmethod
+    def _next_label(period_type: str, last_label: str) -> Optional[str]:
+        try:
+            if period_type == "daily":
+                return (datetime.strptime(last_label, "%Y-%m-%d").date() + timedelta(days=1)).isoformat()
+            if period_type == "monthly":
+                year, month = (int(x) for x in last_label.split("-"))
+                return f"{year + month // 12}-{month % 12 + 1:02d}"
+            _, _, end = last_label.partition("/")
+            start = date.fromisoformat(end) + timedelta(days=1)
+            return f"{start.isoformat()}/{(start + timedelta(days=6)).isoformat()}"
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _period_position(period_type: str, label: str) -> Optional[int]:
+        """Calendar position of a period, so quiet periods missing from the data still count as time passing."""
+        try:
+            if period_type == "daily":
+                return date.fromisoformat(label).toordinal()
+            if period_type == "monthly":
+                year, month = (int(x) for x in label.split("-"))
+                return year * 12 + month
+            return date.fromisoformat(label.partition("/")[0]).toordinal() // 7
+        except ValueError:
+            return None
+
+    def forecast_next_period(self, period_type: str) -> Dict[str, Any]:
+        key = self.PERIOD_KEYS.get(period_type)
+        if not key:
+            return {"error": f"Unknown period_type: {period_type}"}
+        periods = self.stats.get("period_metrics", {}).get(period_type, [])
+        if len(periods) < self.FORECAST_MIN_PERIODS:
+            return {"error": f"Need at least {self.FORECAST_MIN_PERIODS} {period_type} periods to project a trend; only {len(periods)} available."}
+        window = periods[-self.FORECAST_WINDOW:]
+        ys = [p["revenue"] for p in window]
+        n = len(ys)
+        positions = [self._period_position(period_type, p[key]) for p in window]
+        xs = positions if None not in positions else list(range(n))
+        next_x = xs[-1] + 1
+        mean_x, mean_y = sum(xs) / n, sum(ys) / n
+        sxx = sum((x - mean_x) ** 2 for x in xs)
+        slope = sum((x - mean_x) * (y - mean_y) for x, y in zip(xs, ys)) / sxx
+        intercept = mean_y - slope * mean_x
+        ss_tot = sum((y - mean_y) ** 2 for y in ys)
+        ss_res = sum((y - (intercept + slope * x)) ** 2 for x, y in zip(xs, ys))
+        r_squared = round(1 - ss_res / ss_tot, 2) if ss_tot else 1.0
+        projected = max(0.0, intercept + slope * next_x)
+        fit = "strong" if r_squared >= 0.7 else "moderate" if r_squared >= 0.4 else "weak"
+        return {
+            "period_type": period_type,
+            "projected_period": self._next_label(period_type, window[-1][key]),
+            "projected_revenue": round(projected, 2),
+            "last_period": window[-1][key],
+            "last_period_revenue": window[-1]["revenue"],
+            "trend_per_period": round(slope, 2),
+            "based_on_periods": [p[key] for p in window],
+            "trend_fit": fit,
+            "r_squared": r_squared,
+            "caveat": "A straight-line projection from recent history only; it ignores seasonality, promotions and anything not in the data. "
+                      "The latest period may be incomplete, which pulls the projection down.",
+        }
+
     @staticmethod
     def _in_period(date: str, period_type: str, period: str) -> bool:
         if period_type == "daily":
@@ -222,6 +372,9 @@ class ChatTools:
             "list_anomalies": self.list_anomalies,
             "compare_periods": self.compare_periods,
             "explain_change": self.explain_change,
+            "get_driver_trend": self.get_driver_trend,
+            "best_and_worst_periods": self.best_and_worst_periods,
+            "forecast_next_period": self.forecast_next_period,
         }
         fn = dispatch.get(tool_name)
         if not fn:
