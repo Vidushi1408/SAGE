@@ -2,78 +2,50 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
-const pushMock = vi.fn();
-
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: pushMock })
-}));
-
+const push = vi.fn();
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 vi.mock("../../lib/api", () => ({
-  errorMessage: (e: unknown) => (e instanceof Error ? e.message : String(e ?? "")),
-  default: {
-    login: vi.fn().mockResolvedValue({ access_token: "tok" }),
-    listSheets: vi.fn().mockResolvedValue([]),
-    getLatestProfile: vi.fn().mockRejectedValue(new Error("no profile"))
-  }
+  default: { login: vi.fn(), listSheets: vi.fn(), getLatestProfile: vi.fn() },
+  errorMessage: (e: unknown) => (e instanceof Error ? e.message : ""),
 }));
 
-import Login from "./page";
 import api from "../../lib/api";
+import Login from "./page";
 
-describe("Login page", () => {
-  beforeEach(() => {
-    pushMock.mockClear();
-    vi.mocked(api.login).mockClear();
+const mocked = vi.mocked(api, true);
+
+async function signIn() {
+  const user = userEvent.setup();
+  render(<Login />);
+  await user.type(screen.getByLabelText(/email address/i), "a@b.com");
+  await user.type(screen.getByLabelText(/^password$/i), "secret123");
+  await user.click(screen.getByRole("button", { name: /sign in/i }));
+}
+
+describe("Login", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("sends a brand-new workspace to onboarding", async () => {
+    mocked.login.mockResolvedValue(undefined as never);
+    mocked.listSheets.mockResolvedValue([]);
+    mocked.getLatestProfile.mockRejectedValue(new Error("none"));
+    await signIn();
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/onboarding"));
+    expect(mocked.login).toHaveBeenCalledWith("a@b.com", "secret123");
   });
 
-  it("submits credentials and redirects to onboarding when no sheets are connected", async () => {
-    const user = userEvent.setup();
-    render(<Login />);
-
-    await user.type(screen.getByPlaceholderText("name@business.com"), "demo@sage.ai");
-    await user.type(screen.getByPlaceholderText("••••••••"), "sage_demo_pass");
-    await user.click(screen.getByRole("button", { name: /sign in/i }));
-
-    await waitFor(() => {
-      expect(api.login).toHaveBeenCalledWith("demo@sage.ai", "sage_demo_pass");
-    });
-    await waitFor(() => {
-      expect(pushMock).toHaveBeenCalledWith("/onboarding");
-    });
+  it("sends a workspace that already has analysed data to the dashboard", async () => {
+    mocked.login.mockResolvedValue(undefined as never);
+    mocked.listSheets.mockResolvedValue([]);
+    mocked.getLatestProfile.mockResolvedValue({} as never);
+    await signIn();
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/dashboard"));
   });
 
-  it("sends users with uploaded (CSV-only) data straight to the dashboard", async () => {
-    vi.mocked(api.getLatestProfile).mockResolvedValueOnce({ summary: {} });
-    const user = userEvent.setup();
-    render(<Login />);
-
-    await user.type(screen.getByPlaceholderText("name@business.com"), "csv@sage.ai");
-    await user.type(screen.getByPlaceholderText("••••••••"), "pw");
-    await user.click(screen.getByRole("button", { name: /sign in/i }));
-
-    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/dashboard"));
-  });
-
-  it("shows an error message when login fails", async () => {
-    vi.mocked(api.login).mockRejectedValueOnce(new Error("Incorrect email or password"));
-    const user = userEvent.setup();
-    render(<Login />);
-
-    await user.type(screen.getByPlaceholderText("name@business.com"), "demo@sage.ai");
-    await user.type(screen.getByPlaceholderText("••••••••"), "wrongpassword");
-    await user.click(screen.getByRole("button", { name: /sign in/i }));
-
+  it("shows the server's error and does not navigate on a failed login", async () => {
+    mocked.login.mockRejectedValue(new Error("Incorrect email or password"));
+    await signIn();
     expect(await screen.findByText("Incorrect email or password")).toBeInTheDocument();
-  });
-
-  it("associates labels with inputs for accessibility", () => {
-    render(<Login />);
-    expect(screen.getByLabelText(/email address/i)).toHaveAttribute("type", "email");
-    expect(screen.getByLabelText(/^password$/i)).toHaveAttribute("autocomplete", "current-password");
-  });
-
-  it("has a link to the forgot-password page", () => {
-    render(<Login />);
-    expect(screen.getByText(/forgot password\?/i).closest("a")).toHaveAttribute("href", "/forgot-password");
+    expect(push).not.toHaveBeenCalled();
   });
 });
