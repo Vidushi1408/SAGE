@@ -4,8 +4,9 @@ computed statistics. Deliberately NOT a text-to-pandas/eval interface: every too
 is a fixed, parameterized function over the already-computed_stats JSON, so the
 model can only ever read data shapes we control -- never execute arbitrary code.
 """
-from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional
+
+from app.analytics.forecast import next_label, period_position, project_next_period
 
 TOOL_DEFINITIONS = [
     {
@@ -248,8 +249,6 @@ class ChatTools:
             "notes": notes,
         }
 
-    FORECAST_WINDOW = 6
-    FORECAST_MIN_PERIODS = 3
 
     def best_and_worst_periods(self, period_type: str) -> Dict[str, Any]:
         key = self.PERIOD_KEYS.get(period_type)
@@ -328,70 +327,14 @@ class ChatTools:
         )
         return result
 
-    @staticmethod
-    def _next_label(period_type: str, last_label: str) -> Optional[str]:
-        try:
-            if period_type == "daily":
-                return (datetime.strptime(last_label, "%Y-%m-%d").date() + timedelta(days=1)).isoformat()
-            if period_type == "monthly":
-                year, month = (int(x) for x in last_label.split("-"))
-                return f"{year + month // 12}-{month % 12 + 1:02d}"
-            _, _, end = last_label.partition("/")
-            start = date.fromisoformat(end) + timedelta(days=1)
-            return f"{start.isoformat()}/{(start + timedelta(days=6)).isoformat()}"
-        except ValueError:
-            return None
-
-    @staticmethod
-    def _period_position(period_type: str, label: str) -> Optional[int]:
-        """Calendar position of a period, so quiet periods missing from the data still count as time passing."""
-        try:
-            if period_type == "daily":
-                return date.fromisoformat(label).toordinal()
-            if period_type == "monthly":
-                year, month = (int(x) for x in label.split("-"))
-                return year * 12 + month
-            return date.fromisoformat(label.partition("/")[0]).toordinal() // 7
-        except ValueError:
-            return None
+    _next_label = staticmethod(next_label)
+    _period_position = staticmethod(period_position)
 
     def forecast_next_period(self, period_type: str) -> Dict[str, Any]:
-        key = self.PERIOD_KEYS.get(period_type)
-        if not key:
-            return {"error": f"Unknown period_type: {period_type}"}
-        all_periods = self.stats.get("period_metrics", {}).get(period_type, [])
-        # Fit on finished periods only; an in-progress one would drag the projection down.
-        periods = [p for p in all_periods if self._is_complete(p)]
-        if len(periods) < self.FORECAST_MIN_PERIODS:
-            return {"error": f"Need at least {self.FORECAST_MIN_PERIODS} complete {period_type} periods to project a trend; only {len(periods)} available."}
-        window = periods[-self.FORECAST_WINDOW:]
-        ys = [p["revenue"] for p in window]
-        n = len(ys)
-        positions = [self._period_position(period_type, p[key]) for p in window]
-        xs = positions if None not in positions else list(range(n))
-        next_x = xs[-1] + 1
-        mean_x, mean_y = sum(xs) / n, sum(ys) / n
-        sxx = sum((x - mean_x) ** 2 for x in xs)
-        slope = sum((x - mean_x) * (y - mean_y) for x, y in zip(xs, ys)) / sxx
-        intercept = mean_y - slope * mean_x
-        ss_tot = sum((y - mean_y) ** 2 for y in ys)
-        ss_res = sum((y - (intercept + slope * x)) ** 2 for x, y in zip(xs, ys))
-        r_squared = round(1 - ss_res / ss_tot, 2) if ss_tot else 1.0
-        projected = max(0.0, intercept + slope * next_x)
-        fit = "strong" if r_squared >= 0.7 else "moderate" if r_squared >= 0.4 else "weak"
-        return {
-            "period_type": period_type,
-            "projected_period": self._next_label(period_type, window[-1][key]),
-            "projected_revenue": round(projected, 2),
-            "last_period": window[-1][key],
-            "last_period_revenue": window[-1]["revenue"],
-            "trend_per_period": round(slope, 2),
-            "based_on_periods": [p[key] for p in window],
-            "trend_fit": fit,
-            "r_squared": r_squared,
-            "in_progress": self._latest_in_progress(period_type),
-            "caveat": "A straight-line projection from recent finished periods only; it ignores seasonality, promotions and anything not in the data.",
-        }
+        result = project_next_period(period_type, self.stats.get("period_metrics", {}).get(period_type, []))
+        if "error" not in result:
+            result["in_progress"] = self._latest_in_progress(period_type)
+        return result
 
     @staticmethod
     def _in_period(date: str, period_type: str, period: str) -> bool:

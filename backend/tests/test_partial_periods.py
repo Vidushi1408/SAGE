@@ -179,3 +179,20 @@ def test_forecast_answer_describes_the_period_already_under_way(stats):
     text = ChatService.respond(stats, "What will next month look like?")["content"]
     assert "(2026-10)" in text and "already under way" in text and "$30.00 so far" in text
     assert "isn't counted" not in text
+
+
+# --- the stored forecast the charts draw ---
+
+def test_profile_stores_the_same_forecast_the_chat_tool_reports(stats):
+    stored = stats["forecast"]["monthly"]
+    tool = ChatTools(stats).forecast_next_period("monthly")
+    assert stored["projected_period"] == tool["projected_period"] == "2026-10"
+    assert stored["projected_revenue"] == tool["projected_revenue"]
+    assert "in_progress" not in stored  # chart data only; the tool adds the in-progress note
+
+
+def test_profile_forecast_is_absent_when_history_is_too_short():
+    rows = month_rows(2026, 1, 2) + month_rows(2026, 2, 2)
+    forecast = run_profiling(_records(rows))["forecast"]
+    assert forecast["monthly"] is None  # two months aren't enough to project a trend
+    assert set(forecast) == {"weekly", "monthly"}

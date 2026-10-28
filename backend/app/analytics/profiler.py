@@ -2,8 +2,9 @@ from datetime import date, timedelta
 
 import pandas as pd
 import numpy as np
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Optional, Tuple
 from app.models.synced_data import SyncedData
+from app.analytics.forecast import project_next_period
 from app.analytics.column_mapping import map_columns, column_warnings
 from app.analytics.parsing import parse_amount_series
 
@@ -42,6 +43,12 @@ def _growth_between_complete(revenue: pd.Series, complete: List[bool]) -> pd.Ser
     growth = revenue.pct_change() * 100
     comparable = pd.Series(complete, index=revenue.index) & pd.Series(complete, index=revenue.index).shift(1, fill_value=False)
     return growth.where(comparable)
+
+
+def _forecast_or_none(period_type: str, periods: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """The chat tool's projection, stored with the stats so charts can draw the same line; None when there's too little history."""
+    result = project_next_period(period_type, periods)
+    return None if "error" in result else result
 
 
 DRIVER_DAILY_WINDOW = 60  # keep the stored per-day breakdown small
@@ -401,6 +408,10 @@ def run_profiling(records: List[SyncedData]) -> Dict[str, Any]:
         "drivers": {
             "category": _driver_breakdown(df, "Category"),
             "payment_method": _driver_breakdown(df, "Payment Method"),
+        },
+        "forecast": {
+            "weekly": _forecast_or_none("weekly", weekly_list),
+            "monthly": _forecast_or_none("monthly", monthly_list),
         },
         "data_quality": data_quality
     }
