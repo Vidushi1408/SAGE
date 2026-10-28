@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import api, { ChatMessage, errorMessage } from "../lib/api";
 import { MessageCircle, X, Send, Sparkles } from "lucide-react";
 import InsightChart from "./InsightChart";
-import { describeSources } from "./ui";
+import { TypingDots, describeSources } from "./ui";
 
 export default function ChatPanel() {
   const [open, setOpen] = useState(false);
@@ -52,7 +52,7 @@ export default function ChatPanel() {
     <>
       <button
         onClick={() => setOpen(!open)}
-        className="fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full bg-[#9c6b3f] hover:bg-[#7f5631] text-white shadow-lg flex items-center justify-center transition-colors"
+        className={`fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full bg-[#9c6b3f] hover:bg-[#7f5631] text-white shadow-lg flex items-center justify-center transition-colors ${open || messages.length > 0 ? "" : "sage-pulse-ring"}`}
         title="Chat with SAGE"
       >
         {open ? <X className="w-5 h-5" /> : <MessageCircle className="w-5 h-5" />}
@@ -96,8 +96,8 @@ export default function ChatPanel() {
 
             {sending && (
               <div className="flex justify-start">
-                <div className="bg-[#efe8d8] border border-[#e6ddc9] rounded-xl px-3 py-2 text-xs text-[#8a7d78] animate-pulse">
-                  Thinking...
+                <div className="bg-[#efe8d8] border border-[#e6ddc9] rounded-xl px-3 py-1.5 text-xs">
+                  <TypingDots />
                 </div>
               </div>
             )}

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import api, {
   GoogleStatus, InsightHistoryEntry, InsightsPayload, ProfileData, Sheet, SlackStatus, User, errorMessage
 } from "../../lib/api";
+import { fireConfetti, firstTime } from "../../lib/celebrate";
 
 export interface WorkspaceContextValue {
   loading: boolean;
@@ -130,6 +131,11 @@ export default function WorkspaceProvider({ children }: { children: React.ReactN
 
   // Auth gate + first load, and the one-time toast after OAuth / invite redirects.
   const started = useRef(false);
+  const hadInsights = useRef(false);
+  const celebrated = useRef(false);
+  const userId = useRef("");
+  useEffect(() => { hadInsights.current = !!insights; }, [insights]);
+  useEffect(() => { userId.current = user?.id ? String(user.id) : ""; }, [user]);
   useEffect(() => {
     if (started.current) return;
     started.current = true;
@@ -164,6 +170,8 @@ export default function WorkspaceProvider({ children }: { children: React.ReactN
   }, [toast]);
 
   const runAnalysis = useCallback(async () => {
+    celebrated.current = false;
+    const firstRun = !hadInsights.current;
     setRefreshStep("Re-running statistical analysis...");
     await api.triggerProfiling();
     setRefreshStep("Compiling insights...");
@@ -171,6 +179,12 @@ export default function WorkspaceProvider({ children }: { children: React.ReactN
     setRefreshStep("Refreshing workspace...");
     setSelectedInsightId("latest");
     await load();
+    // Milestone: the first analysis this account has ever run.
+    if (firstRun && userId.current && firstTime("first-insights", userId.current)) {
+      celebrated.current = true;
+      setToast("Your first insights are ready. Welcome to SAGE!");
+      void fireConfetti();
+    }
   }, [load]);
 
   const refreshAnalysis = useCallback(async () => {
@@ -193,7 +207,7 @@ export default function WorkspaceProvider({ children }: { children: React.ReactN
         setSyncRows(res.rows_synced);
       }
       await runAnalysis();
-      setToast("Analysis updated.");
+      if (!celebrated.current) setToast("Analysis updated.");
     } catch (err) {
       setError("Refresh failed: " + friendlyPipelineError(errorMessage(err)));
     } finally {

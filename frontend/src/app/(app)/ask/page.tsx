@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Send, Sparkles } from "lucide-react";
 import api, { ChatMessage, errorMessage } from "../../../lib/api";
 import InsightChart from "../../../components/InsightChart";
-import { PageHeader, describeSources } from "../../../components/ui";
+import { PageHeader, TypingDots, describeSources } from "../../../components/ui";
 import { useWorkspace } from "../../../components/workspace/WorkspaceProvider";
 
 const SUGGESTIONS = [
@@ -84,7 +84,7 @@ export default function AskPage() {
               </div>
             </div>
           ))}
-          {sending && <div className="flex justify-start"><div className="bg-[#efe8d8] border border-[#e6ddc9] rounded-2xl px-4 py-3 text-xs text-[#8a7d78] animate-pulse">Thinking...</div></div>}
+          {sending && <div className="flex justify-start"><div className="bg-[#efe8d8] border border-[#e6ddc9] rounded-2xl px-4 py-2 text-xs"><TypingDots /></div></div>}
         </div>
 
         {error && <div role="alert" className="px-6 pb-2 text-xs text-rose-600">{error}</div>}

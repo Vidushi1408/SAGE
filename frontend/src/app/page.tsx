@@ -2,6 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
+import Reveal from "../components/Reveal";
 import { MarketingFooter, MarketingHeader } from "../components/marketing/MarketingChrome";
 import { 
   Sparkles, Database, ShieldAlert, ArrowRight, BarChart3, LineChart, Users, CheckCircle2, ChevronRight 
@@ -21,13 +22,13 @@ export default function LandingPage() {
       <section className="max-w-6xl mx-auto px-6 pt-20 pb-16 z-10 text-center space-y-8">
         
         {/* Sparkle badge */}
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#f2e9dc] border border-[#ddc2a0] text-[#7f5631] text-xs font-bold tracking-wide">
-          <Sparkles className="w-3.5 h-3.5" />
+        <div className="sage-pop inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#f2e9dc] border border-[#ddc2a0] text-[#7f5631] text-xs font-bold tracking-wide">
+          <Sparkles className="sage-float w-3.5 h-3.5" />
           <span>Real-time Business Intelligence Engine</span>
         </div>
 
         {/* Hero Headings */}
-        <div className="space-y-4 max-w-4xl mx-auto">
+        <div className="sage-reveal space-y-4 max-w-4xl mx-auto" style={{ "--i": 1 } as React.CSSProperties}>
           <h2 className="text-4xl sm:text-6xl font-extrabold tracking-tight text-[#3d3335] leading-[1.1]">
             An AI Business Analyst That{" "}
             <span className="text-[#9c6b3f]">
@@ -40,7 +41,7 @@ export default function LandingPage() {
         </div>
 
         {/* CTA Actions */}
-        <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-2">
+        <div className="sage-reveal flex flex-col sm:flex-row gap-4 justify-center items-center pt-2" style={{ "--i": 3 } as React.CSSProperties}>
           <Link 
             href="/register" 
             className="w-full sm:w-auto px-8 py-3.5 text-xs font-bold rounded-lg bg-[#9c6b3f] hover:bg-[#7f5631] text-white transition-all shadow-sm flex items-center justify-center gap-2"
@@ -61,7 +62,7 @@ export default function LandingPage() {
       </section>
 
       {/* Workflow Diagram Section */}
-      <section id="workflow" className="max-w-5xl mx-auto px-6 py-12 z-10 w-full">
+      <Reveal as="section" id="workflow" className="max-w-5xl mx-auto px-6 py-12 z-10 w-full">
         <div className="glass-card p-8 space-y-6">
           <div className="text-center">
             <h3 className="text-xs font-bold text-[#9c6b3f] uppercase tracking-widest">SAGE Architecture Flow</h3>
@@ -106,10 +107,10 @@ export default function LandingPage() {
 
           </div>
         </div>
-      </section>
+      </Reveal>
 
       {/* Features Grid */}
-      <section id="features" className="max-w-6xl mx-auto px-6 py-16 z-10 w-full space-y-12">
+      <Reveal as="section" id="features" className="max-w-6xl mx-auto px-6 py-16 z-10 w-full space-y-12">
         <div className="text-center max-w-2xl mx-auto space-y-2">
           <h3 className="text-xs font-bold text-[#9c6b3f] uppercase tracking-widest">Built for modern businesses</h3>
           <p className="text-2xl sm:text-3xl font-bold text-[#3d3335]">Everything you need to evaluate metrics</p>
@@ -167,7 +168,7 @@ export default function LandingPage() {
           </div>
 
         </div>
-      </section>
+      </Reveal>
 
       <MarketingFooter />
 

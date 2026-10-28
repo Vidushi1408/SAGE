@@ -49,12 +49,34 @@ export function Skeleton({ className = "" }: { className?: string }) {
   return <div className={`sage-shimmer rounded-lg ${className}`} aria-hidden="true" />;
 }
 
+/** Three bouncing dots: "SAGE is working on it". Respects reduced motion via the global rule. */
+export function TypingDots({ label = "SAGE is thinking" }: { label?: string }) {
+  return (
+    <span role="status" aria-label={label} className="inline-flex items-center gap-1 text-[#9c6b3f] py-1">
+      <span className="sage-dot" /><span className="sage-dot" /><span className="sage-dot" />
+    </span>
+  );
+}
+
+/** A small sage leaf that floats gently; the mascot for empty states. */
+export function SageLeaf({ className = "" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 64 64" className={`sage-float w-14 h-14 ${className}`} aria-hidden="true">
+      <circle cx="32" cy="32" r="30" fill="#f2e9dc" />
+      <path d="M32 50c0-14 2-24 14-32-1 14-5 26-14 32z" fill="#4a8a3a" />
+      <path d="M32 50c0-10-2-18-12-24 0 11 4 19 12 24z" fill="#6aa857" />
+      <path d="M32 50V26" stroke="#fffdf8" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export function EmptyState({
   icon, title, body, action
 }: { icon: React.ReactNode; title: string; body: string; action?: React.ReactNode }) {
   return (
-    <div className="glass-card p-10 text-center flex flex-col items-center gap-3">
-      <div className="p-3 rounded-xl bg-[#f2e9dc] border border-[#ead9c2] text-[#9c6b3f]">{icon}</div>
+    <div className="glass-card sage-fade p-10 text-center flex flex-col items-center gap-3">
+      <SageLeaf />
+      <div className="p-2 rounded-lg bg-[#f2e9dc] border border-[#ead9c2] text-[#9c6b3f]">{icon}</div>
       <h3 className="text-base font-bold text-[#3d3335]">{title}</h3>
       <p className="text-xs text-[#8a7d78] max-w-md leading-relaxed">{body}</p>
       {action && <div className="pt-2">{action}</div>}
