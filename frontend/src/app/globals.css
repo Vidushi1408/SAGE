@@ -7,6 +7,41 @@
   --border: #e6ddc9;
   --accent: #9c6b3f;
   --accent-foreground: #ffffff;
+
+  /* Chart palette. Categorical slots validated with the dataviz validator (light, surface #fffdf8):
+     lightness band, chroma floor, adjacent CVD separation and normal-vision floor all pass; only the
+     ochre (slot 3) sits under 3:1 contrast, so charts using it carry visible labels or a table view.
+     Slots are used in this order and never cycled; past 8 the tail folds into "Other". */
+  --viz-1: #b8601c;
+  --viz-2: #0b8da3;
+  --viz-3: #c99a12;
+  --viz-4: #8f4aa0;
+  --viz-5: #4a8a3a;
+  --viz-6: #d9607a;
+  --viz-7: #3b5db5;
+  --viz-8: #b5352e;
+  --viz-other: #a89b93;
+  /* One-hue sequential ramp (copper), lightness falls monotonically; step 1 is "almost nothing". */
+  --viz-seq-1: #f6e7d4;
+  --viz-seq-2: #edcfaa;
+  --viz-seq-3: #e0a974;
+  --viz-seq-4: #cf8444;
+  --viz-seq-5: #b8601c;
+  --viz-seq-6: #8f4510;
+  --viz-seq-7: #66300a;
+  --viz-good: #0ca30c;
+  --viz-critical: #d03b3b;
+  --viz-ink: #3d3335;
+  --viz-ink-2: #6d6062;
+  --viz-muted: #8a7d78;
+  --viz-grid: #ece2ce;
+  --viz-baseline: #d9cdb8;
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-fast: 150ms;
+  --dur-base: 300ms;
+  --dur-slow: 600ms;
 }
 
 @theme inline {
@@ -53,4 +88,74 @@ body {
 .glass-card:hover {
   border-color: #d9cdb8;
   box-shadow: 0 4px 14px rgba(61, 51, 53, 0.08);
+}
+
+
+/* ---------- Motion ---------- */
+@keyframes sage-fade-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes sage-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes sage-pop {
+  0% { opacity: 0; transform: scale(0.85); }
+  60% { transform: scale(1.04); }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes sage-shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+@keyframes sage-dots {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+  40% { transform: translateY(-4px); opacity: 1; }
+}
+@keyframes sage-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+@keyframes sage-pulse-ring {
+  0% { box-shadow: 0 0 0 0 rgba(184, 96, 28, 0.45); }
+  70%, 100% { box-shadow: 0 0 0 12px rgba(184, 96, 28, 0); }
+}
+
+/* Staggered entrance: set style={{ "--i": n }} on each item. */
+.sage-reveal {
+  animation: sage-fade-up var(--dur-slow) var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 70ms);
+}
+.sage-pop { animation: sage-pop var(--dur-slow) var(--ease-out) both; }
+.sage-fade { animation: sage-fade-in var(--dur-base) ease both; }
+.sage-float { animation: sage-float 4s ease-in-out infinite; }
+.sage-pulse-ring { animation: sage-pulse-ring 2s ease-out infinite; }
+
+.sage-shimmer {
+  background: linear-gradient(100deg, #eadfca 30%, #f6efe0 50%, #eadfca 70%);
+  background-size: 200% 100%;
+  animation: sage-shimmer 1.6s linear infinite;
+}
+
+.sage-dot { display: inline-block; width: 5px; height: 5px; border-radius: 9999px; background: currentColor; animation: sage-dots 1.2s ease-in-out infinite; }
+.sage-dot:nth-child(2) { animation-delay: 0.15s; }
+.sage-dot:nth-child(3) { animation-delay: 0.3s; }
+
+/* Cards that can be lifted (KPI tiles, insight cards) */
+.sage-lift { transition: transform var(--dur-base) var(--ease-out), box-shadow var(--dur-base) ease, border-color var(--dur-base) ease; }
+.sage-lift:hover { transform: translateY(-2px); }
+
+/* Chart line draw-in (stroke length is set inline as --len) */
+@keyframes sage-draw { from { stroke-dashoffset: var(--len, 1000); } to { stroke-dashoffset: 0; } }
+
+/* Anyone who asks their system for less motion gets none: everything lands in its final state. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

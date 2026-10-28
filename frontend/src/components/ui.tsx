@@ -46,7 +46,7 @@ export function PageHeader({ title, subtitle, actions }: { title: string; subtit
 }
 
 export function Skeleton({ className = "" }: { className?: string }) {
-  return <div className={`animate-pulse rounded-lg bg-[#e6ddc9]/70 ${className}`} aria-hidden="true" />;
+  return <div className={`sage-shimmer rounded-lg ${className}`} aria-hidden="true" />;
 }
 
 export function EmptyState({
