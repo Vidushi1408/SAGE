@@ -25,7 +25,7 @@ export default function InsightChart({ insight, idx = 0 }: { insight: InsightObj
 
   if (insight.chart_type === "pie") {
     return (
-      <div className="h-52 mt-2 w-full" role="img" aria-label={summary} data-chart={idx}>
+      <div className="sm:h-52 mt-2 w-full" role="img" aria-label={summary} data-chart={idx}>
         <DonutChart slices={insight.chart_data.map(d => ({ name: String(d.name), value: Number(d.value) }))} />
       </div>
     );
