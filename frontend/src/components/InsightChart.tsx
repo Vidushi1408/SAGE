@@ -1,78 +1,55 @@
 "use client";
 
 import React from "react";
-import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  BarChart, Bar, PieChart, Pie, Cell
-} from "recharts";
+import { Area, AreaChart, Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { InsightObject } from "../lib/api";
+import { CATEGORICAL, INK, compactMoney } from "../lib/chartTheme";
+import { formatMoney } from "./ui";
+import { AXIS_PROPS, BAR_CURSOR, Grid, MAX_BAR, RoundedBar, TooltipCard, useChartMotion } from "./charts/chartKit";
+import DonutChart from "./charts/DonutChart";
 
-const COLORS = ["#9c6b3f", "#7d6864", "#a08a5c", "#5c6b5f", "#b9855a", "#6d7a8a"];
+const C1 = CATEGORICAL[0];
 
-const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: { value: number; name: string }[] }) => {
-  if (active && payload && payload.length) {
-    return (
-      <div className="bg-white border border-[#e6ddc9] px-3 py-2 rounded-lg text-xs shadow-lg">
-        <p className="font-semibold text-[#8a7d78]">{payload[0].name}</p>
-        <p className="font-bold text-[#9c6b3f] mt-0.5">
-          ${typeof payload[0].value === "number" ? payload[0].value.toLocaleString(undefined, { minimumFractionDigits: 2 }) : payload[0].value}
-        </p>
-      </div>
-    );
-  }
-  return null;
-};
-
+/** One insight's chart: a trend (area), a ranking (bars) or a part-to-whole (donut), in the shared chart style. */
 export default function InsightChart({ insight, idx = 0 }: { insight: InsightObject; idx?: number }) {
+  const motion = useChartMotion();
   const hasChart = insight.chart_type !== "none" && insight.chart_data && insight.chart_data.length > 0;
   if (!hasChart) return null;
 
+  const tooltip = ({ payload }: { payload?: readonly { payload?: unknown }[] }) => {
+    const row = payload?.[0]?.payload as { name: string; value: number } | undefined;
+    return row ? <TooltipCard title={row.name} rows={[{ color: C1, text: formatMoney(row.value) }]} /> : null;
+  };
+  const summary = `${insight.title}: ${insight.chart_data.length} data points`;
+
+  if (insight.chart_type === "pie") {
+    return (
+      <div className="h-52 mt-2 w-full" role="img" aria-label={summary} data-chart={idx}>
+        <DonutChart slices={insight.chart_data.map(d => ({ name: String(d.name), value: Number(d.value) }))} />
+      </div>
+    );
+  }
+
   return (
-    <div className="h-60 mt-2 w-full">
+    <div className="h-60 mt-2 w-full" role="img" aria-label={summary}>
       <ResponsiveContainer width="100%" height="100%">
         {insight.chart_type === "line" || insight.chart_type === "area" ? (
-          <AreaChart data={insight.chart_data} margin={{ top: 10, right: 5, left: -25, bottom: 0 }}>
-            <defs>
-              <linearGradient id={`grad-${idx}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#b9855a" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="#b9855a" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#ece2ce" />
-            <XAxis dataKey="name" stroke="#a89b93" fontSize={9} tickLine={false} />
-            <YAxis stroke="#a89b93" fontSize={9} tickLine={false} />
-            <Tooltip content={<CustomTooltip />} />
-            <Area type="monotone" dataKey="value" stroke="#9c6b3f" strokeWidth={2} fillOpacity={1} fill={`url(#grad-${idx})`} />
+          <AreaChart data={insight.chart_data} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
+            <Grid />
+            <XAxis dataKey="name" minTickGap={24} {...AXIS_PROPS} />
+            <YAxis tickFormatter={v => compactMoney(Number(v))} width={48} {...AXIS_PROPS} />
+            <Tooltip cursor={{ stroke: INK.baseline }} content={tooltip} />
+            <Area type="monotone" dataKey="value" stroke={C1} strokeWidth={2} fill={C1} fillOpacity={0.1} dot={false}
+              activeDot={{ r: 5, fill: C1, stroke: INK.surface, strokeWidth: 2 }} {...motion} />
           </AreaChart>
-        ) : insight.chart_type === "bar" ? (
-          <BarChart data={insight.chart_data} margin={{ top: 10, right: 5, left: -25, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#ece2ce" />
-            <XAxis dataKey="name" stroke="#a89b93" fontSize={9} tickLine={false} />
-            <YAxis stroke="#a89b93" fontSize={9} tickLine={false} />
-            <Tooltip content={<CustomTooltip />} />
-            <Bar dataKey="value" fill="#9c6b3f" radius={[3, 3, 0, 0]}>
-              {insight.chart_data.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-              ))}
-            </Bar>
-          </BarChart>
         ) : (
-          <PieChart>
-            <Tooltip content={<CustomTooltip />} />
-            <Pie
-              data={insight.chart_data}
-              cx="50%"
-              cy="50%"
-              innerRadius={50}
-              outerRadius={70}
-              paddingAngle={3}
-              dataKey="value"
-            >
-              {insight.chart_data.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-              ))}
-            </Pie>
-          </PieChart>
+          <BarChart data={insight.chart_data} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
+            <Grid />
+            <XAxis dataKey="name" minTickGap={8} {...AXIS_PROPS} />
+            <YAxis tickFormatter={v => compactMoney(Number(v))} width={48} {...AXIS_PROPS} />
+            <Tooltip cursor={BAR_CURSOR} content={tooltip} />
+            <Bar dataKey="value" fill={C1} maxBarSize={MAX_BAR} shape={(p: unknown) => <RoundedBar {...(p as object)} />} {...motion} />
+          </BarChart>
         )}
       </ResponsiveContainer>
     </div>

@@ -35,7 +35,7 @@ export function resetColorRegistry(): void {
  * Keep the largest `max - 1` entries and fold the rest into one "Other" entry (summing the numeric `keys`),
  * so a donut never shows more than `max` slices. Rows must already be sorted largest-first.
  */
-export function foldTail<T extends Record<string, unknown>>(rows: T[], nameKey: keyof T, sumKeys: (keyof T)[], max = MAX_SLICES): T[] {
+export function foldTail<T extends object>(rows: T[], nameKey: keyof T, sumKeys: (keyof T)[], max = MAX_SLICES): T[] {
   if (rows.length <= max) return rows;
   const head = rows.slice(0, max - 1);
   const tail = rows.slice(max - 1);
