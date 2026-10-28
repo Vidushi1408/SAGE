@@ -177,5 +177,5 @@ def test_forecast_answer_says_when_it_switches_granularity_and_reads_naturally()
 
 def test_forecast_answer_describes_the_period_already_under_way(stats):
     text = ChatService.respond(stats, "What will next month look like?")["content"]
-    assert "(2026-10)" in text and "already under way" in text and "$20.00 so far" in text
+    assert "(2026-10)" in text and "already under way" in text and "$30.00 so far" in text
     assert "isn't counted" not in text
