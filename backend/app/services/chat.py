@@ -9,6 +9,7 @@ import anthropic
 from app.core.config import settings
 from app.core.prompts import CHAT_SYSTEM_PROMPT
 from app.services import ollama
+from app.services.answer_check import check_reply
 from app.services.chat_tools import ChatTools, TOOL_DEFINITIONS
 
 logger = logging.getLogger("sage.chat")
@@ -45,8 +46,10 @@ class ChatService:
 
         try:
             if provider == "ollama":
-                return cls._ollama_respond(tools, user_message, history or [])
-            return cls._agent_respond(tools, user_message, history or [])
+                result = cls._ollama_respond(tools, user_message, history or [])
+            else:
+                result = cls._agent_respond(tools, user_message, history or [])
+            return cls._verified(result, tools, user_message, history or [])
         except Exception as e:
             logger.error(f"Chat agent failed: {str(e)}", exc_info=True)
             return {
@@ -58,6 +61,22 @@ class ChatService:
             }
 
     @classmethod
+    def _verified(cls, result: Dict[str, Any], tools: ChatTools, user_message: str, history: List[Dict[str, str]]) -> Dict[str, Any]:
+        """
+        Model answers must only state figures and periods the tools returned. If one doesn't, swap in the
+        deterministic answer (always grounded) rather than show a made-up number.
+        """
+        seen = result.pop("tool_results", None)
+        if seen is None:  # deterministic answer, already grounded
+            return result
+        context = [user_message] + [h.get("content", "") for h in history]
+        verdict = check_reply(result["content"], seen, context)
+        if verdict.ok:
+            return result
+        logger.warning("Chat reply failed verification (%s); using the deterministic answer", ", ".join(verdict.problems))
+        return cls._mock_respond(tools, user_message)
+
+    @classmethod
     def _agent_respond(cls, tools: ChatTools, user_message: str, history: List[Dict[str, str]]) -> Dict[str, Any]:
         client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
 
@@ -67,6 +86,7 @@ class ChatService:
         last_tool_input = None
         last_tool_result = None
         used: List[str] = []
+        seen: List[Any] = []
 
         for _ in range(MAX_TOOL_ITERATIONS):
             response = client.messages.create(
@@ -86,6 +106,7 @@ class ChatService:
                     "query_used": last_tool_name,
                     "query_result": last_tool_result,
                     "tools_used": used,
+                    "tool_results": seen,
                 }
 
             # Execute every tool_use block, append results, and loop back to the model
@@ -99,6 +120,7 @@ class ChatService:
                 last_tool_input = block.input
                 last_tool_result = tools.call(block.name, block.input)
                 cls._note_tool(used, block.name)
+                seen.append(last_tool_result)
                 tool_results.append({
                     "type": "tool_result",
                     "tool_use_id": block.id,
@@ -113,6 +135,7 @@ class ChatService:
             "query_used": last_tool_name,
             "query_result": last_tool_result,
             "tools_used": used,
+            "tool_results": seen,
         }
 
     @staticmethod
@@ -135,6 +158,7 @@ class ChatService:
 
             last_name = last_result = None
             used: List[str] = []
+            seen: List[Any] = []
             for _ in range(MAX_TOOL_ITERATIONS):
                 reply = ollama.chat(messages, tools=tool_specs)
                 calls = reply.get("tool_calls") or []
@@ -144,7 +168,7 @@ class ChatService:
                     text = (reply.get("content") or "").strip()
                     return {"content": text or "I don't have a clear answer for that yet.",
                             "chart": cls._build_chart(last_name, last_result),
-                            "query_used": last_name, "query_result": last_result, "tools_used": used}
+                            "query_used": last_name, "query_result": last_result, "tools_used": used, "tool_results": seen}
                 messages.append(reply)
                 for call in calls:
                     fn = call.get("function", {})
@@ -152,6 +176,7 @@ class ChatService:
                     args = fn.get("arguments") or {}
                     last_result = tools.call(last_name, args if isinstance(args, dict) else {})
                     cls._note_tool(used, last_name)
+                    seen.append(last_result)
                     messages.append({"role": "tool", "content": json.dumps(last_result, default=str)})
             return cls._mock_respond(tools, user_message)
         except Exception as e:
