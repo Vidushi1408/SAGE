@@ -13,9 +13,9 @@ from app.core.rate_limit import login_account_limiter, login_ip_limiter, demo_ip
 from app.models.user import User
 from app.schemas.user import (
     UserCreate, UserResponse, Token,
-    ForgotPasswordRequest, ResetPasswordRequest, UpdateMeRequest, ChangePasswordRequest
+    ForgotPasswordRequest, ResetPasswordRequest, UpdateMeRequest, ChangePasswordRequest, DeleteAccountRequest
 )
-from app.api.deps import get_current_user
+from app.api.deps import forbid_demo, get_current_user
 from app.services.email import EmailService
 from app.services.demo import DEMO_OWNER_EMAIL, DEMO_OWNER_DEV_PASSWORD, ensure_demo_workspace, is_demo_account
 
@@ -140,6 +140,43 @@ def update_me(
     db.commit()
     db.refresh(current_user)
     return current_user
+
+
+@router.delete("/me")
+def delete_my_account(
+    payload: DeleteAccountRequest,
+    current_user: User = Depends(forbid_demo),
+    db: Session = Depends(get_db)
+):
+    """
+    Permanently delete the signed-in account, after re-entering the password.
+    The workspace owner's deletion removes the whole workspace: data, insights, connections and teammates.
+    A teammate deleting themselves removes only their own account and chat history.
+    """
+    key = f"delete:{current_user.id}"
+    wait = login_account_limiter.retry_after(key)
+    if wait:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many incorrect attempts. Try again in {max(1, wait // 60)} minute(s).",
+            headers={"Retry-After": str(wait)},
+        )
+    if not verify_password(payload.password, current_user.hashed_password):
+        login_account_limiter.record_failure(key)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="That password is incorrect.")
+
+    if current_user.workspace_owner_id is None:
+        from app.models.connected_account import ConnectedAccount
+        from app.services import google_sheets
+        for account in db.query(ConnectedAccount).filter(ConnectedAccount.user_id == current_user.id, ConnectedAccount.service == "google_sheets"):
+            google_sheets.revoke_access(account)
+        # Delete teammates explicitly: left to the ORM they would be detached, not removed.
+        for member in db.query(User).filter(User.workspace_owner_id == current_user.id).all():
+            db.delete(member)
+        db.flush()
+    db.delete(current_user)
+    db.commit()
+    return {"status": "deleted"}
 
 
 @router.post("/change-password")

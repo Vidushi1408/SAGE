@@ -138,6 +138,19 @@ class ApiClient {
     }
   }
 
+  private async downloadRequest(endpoint: string): Promise<Blob> {
+    const headers = new Headers();
+    const token = this.getToken();
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, { headers });
+    this.handleExpiredSession(response, !!token);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ detail: "Unknown error occurred" }));
+      throw new Error(formatErrorDetail(errorData.detail) || `HTTP error ${response.status}`);
+    }
+    return response.blob();
+  }
+
   private async uploadRequest<T>(endpoint: string, formData: FormData): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`;
     const headers = new Headers();
@@ -176,6 +189,20 @@ class ApiClient {
 
     this.setToken(res.access_token);
     return res;
+  }
+
+  /** Everything SAGE holds for this workspace, as a ZIP of CSV/JSON files (never credentials or tokens). */
+  public async exportData(): Promise<Blob> {
+    return this.downloadRequest("/api/v1/data/export");
+  }
+
+  /** Permanently delete the signed-in account (and, for a workspace owner, the whole workspace). */
+  public async deleteAccount(password: string): Promise<{ status: string }> {
+    return this.request<{ status: string }>("/api/v1/auth/me", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password })
+    });
   }
 
   /** Enter the read-only demo workspace. The server returns 404 when demo mode is switched off. */

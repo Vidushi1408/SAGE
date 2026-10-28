@@ -35,6 +35,29 @@ describe("ApiClient", () => {
     expect(localStorage.getItem("sage_token")).toBe("guest-token");
   });
 
+  it("deleteAccount sends the password in a DELETE body with the session token", async () => {
+    global.fetch = mockFetchOnce({ access_token: "tok" });
+    await api.login("a@b.com", "pw");
+    const fetchSpy = mockFetchOnce({ status: "deleted" });
+    global.fetch = fetchSpy;
+    await api.deleteAccount("ownerpassword");
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toMatch(/\/api\/v1\/auth\/me$/);
+    expect(init.method).toBe("DELETE");
+    expect(JSON.parse(init.body)).toEqual({ password: "ownerpassword" });
+    expect((init.headers as Headers).get("Authorization")).toBe("Bearer tok");
+  });
+
+  it("exportData returns the response as a blob and surfaces server errors", async () => {
+    global.fetch = mockFetchOnce({ access_token: "tok" });
+    await api.login("a@b.com", "pw");
+    const blob = new Blob(["zip"]);
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, status: 200, blob: async () => blob });
+    expect(await api.exportData()).toBe(blob);
+    global.fetch = mockFetchOnce({ detail: "This is a demo account." }, 403);
+    await expect(api.exportData()).rejects.toThrow("This is a demo account.");
+  });
+
   it("attaches the Authorization header once logged in", async () => {
     global.fetch = mockFetchOnce({ access_token: "test-token-123" });
     await api.login("demo@sage.ai", "sage_demo_pass");

@@ -67,6 +67,10 @@ class ChangePasswordRequest(BaseModel):
     def strong_enough(cls, v):
         return validate_password_strength(v)
 
+class DeleteAccountRequest(BaseModel):
+    password: str
+
+
 class UpdateMeRequest(BaseModel):
     alert_email_enabled: Optional[bool] = None
     name: Optional[str] = Field(default=None, max_length=100)

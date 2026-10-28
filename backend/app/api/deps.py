@@ -54,3 +54,10 @@ def require_writer(current_user: User = Depends(get_current_user)) -> User:
 def get_workspace_owner_id(user: User) -> UUID:
     """Return the owner user ID who holds the primary synced sheets/stats context."""
     return user.workspace_owner_id if user.workspace_owner_id else user.id
+
+
+def forbid_demo(current_user: User = Depends(get_current_user)) -> User:
+    """The shared demo visitor can't delete or export anything."""
+    if current_user.is_demo:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This is a demo account. Create your own workspace to use this.")
+    return current_user

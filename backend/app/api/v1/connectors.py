@@ -222,13 +222,7 @@ def google_disconnect(current_user: User = Depends(require_writer), db: Session 
     if not account:
         return {"status": "success", "connected": False}
 
-    if not google_sheets.is_mock(account):
-        token = decrypt_token(account.refresh_token) or decrypt_token(account.access_token)
-        if token:
-            try:  # best effort: the connection is removed here even if Google can't be reached
-                httpx.post("https://oauth2.googleapis.com/revoke", params={"token": token}, timeout=10)
-            except Exception as e:
-                logger.warning("Google token revoke failed: %s", e)
+    google_sheets.revoke_access(account)  # best effort: the connection is removed even if Google can't be reached
 
     db.query(SyncedData).filter(
         SyncedData.user_id == owner_id,

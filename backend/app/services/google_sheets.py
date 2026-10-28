@@ -1,5 +1,8 @@
 """Google Sheets/Drive access for a connected account: credentials, listing, and reading rows."""
+import logging
 import re
+
+import httpx
 from datetime import timedelta
 from app.core.clock import utcnow
 from typing import Any, Dict, List
@@ -19,6 +22,22 @@ from app.services.token_crypto import decrypt_token, encrypt_token
 TOKEN_URI = "https://oauth2.googleapis.com/token"
 MOCK_TOKEN = "mock_access_token"
 RECONNECT = "Please reconnect your Google account from the Data page."
+
+
+logger = logging.getLogger("sage.google")
+
+
+def revoke_access(account: ConnectedAccount) -> None:
+    """Best effort: tell Google to drop our access. The caller removes the connection even if this fails."""
+    if is_mock(account):
+        return
+    token = decrypt_token(account.refresh_token) or decrypt_token(account.access_token)
+    if not token:
+        return
+    try:
+        httpx.post("https://oauth2.googleapis.com/revoke", params={"token": token}, timeout=10)
+    except Exception as e:
+        logger.warning("Google token revoke failed: %s", e)
 
 
 def is_mock(account: ConnectedAccount) -> bool:

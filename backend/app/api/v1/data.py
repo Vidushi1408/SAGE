@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 import pandas as pd
 
 from app.core.db import get_db
-from app.api.deps import get_current_user, get_workspace_owner_id, require_writer
+from app.api.deps import forbid_demo, get_current_user, get_workspace_owner_id, require_writer
 from app.models.user import User
 from app.models.synced_data import SyncedData
 from app.models.computed_stat import ComputedStat
@@ -23,6 +23,17 @@ def get_synced_data(
         "count": len(records),
         "data": [r.raw_payload for r in records[:100]]  # limit output for performance
     }
+
+
+@router.get("/export")
+def export_my_data(current_user: User = Depends(forbid_demo), db: Session = Depends(get_db)):
+    """Download everything SAGE holds for this workspace as a ZIP of CSV/JSON files (no credentials or tokens)."""
+    from app.services.account_export import build_export
+    return Response(
+        content=build_export(db, current_user),
+        media_type="application/zip",
+        headers={"Content-Disposition": 'attachment; filename="sage-export.zip"'},
+    )
 
 
 @router.post("/profile", status_code=status.HTTP_201_CREATED)
