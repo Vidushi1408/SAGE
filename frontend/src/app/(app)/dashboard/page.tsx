@@ -7,28 +7,14 @@ import {
   TrendingDown, TrendingUp, Trophy
 } from "lucide-react";
 import { useWorkspace } from "../../../components/workspace/WorkspaceProvider";
-import { latestComparableGrowth, periodInProgress } from "../../../lib/periods";
+import { isComplete, latestComparableGrowth, periodInProgress, type PeriodPoint } from "../../../lib/periods";
+import KpiCard from "../../../components/KpiCard";
 import InsightChart from "../../../components/InsightChart";
 import { Alert, EmptyState, PageHeader, formatDateTime, formatMoney, primaryButton, timeAgo } from "../../../components/ui";
 
 function greeting(): string {
   const h = new Date().getHours();
   return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
-}
-
-function Kpi({ label, value, hint, icon, tone }: { label: string; value: string; hint: string; icon: React.ReactNode; tone: string }) {
-  return (
-    <div className="glass-card p-6 flex flex-col justify-between">
-      <div className="flex justify-between items-start mb-4">
-        <span className="text-xs font-bold text-[#8a7d78] uppercase tracking-widest">{label}</span>
-        <div className={`p-2 rounded-lg ${tone}`}>{icon}</div>
-      </div>
-      <div>
-        <div className="text-2xl font-bold text-[#3d3335]">{value}</div>
-        <div className="text-[10px] text-[#8a7d78] mt-1">{hint}</div>
-      </div>
-    </div>
-  );
 }
 
 function GettingStarted() {
@@ -73,7 +59,8 @@ export default function OverviewPage() {
 
   const summary = profile?.summary ?? { total_revenue: 0, total_transactions: 0, avg_transaction_value: 0 };
   const anomalies: { transaction_id: string; date: string; amount: number; reason: string; z_score: number }[] = profile?.anomalies ?? [];
-  const weekly = profile?.period_metrics?.weekly ?? [];
+  const weekly: PeriodPoint[] = profile?.period_metrics?.weekly ?? [];
+  const finished = weekly.filter(isComplete);
   const comparable = latestComparableGrowth(weekly);
   const growth: number | null | undefined = comparable?.growth_pct;
   const weekInProgress = periodInProgress(weekly);
@@ -126,12 +113,17 @@ export default function OverviewPage() {
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Kpi label="Total Sales" value={formatMoney(summary.total_revenue)} hint="Gross sales in the analysed window" icon={<DollarSign className="w-4 h-4" />} tone="bg-[#f2e9dc] text-[#9c6b3f]" />
-        <Kpi label="Transactions" value={String(summary.total_transactions)} hint="Entries processed" icon={<Activity className="w-4 h-4" />} tone="bg-[#f2e9dc] text-[#7d6864]" />
-        <Kpi label="Average Sale" value={formatMoney(summary.avg_transaction_value)} hint="Average ticket value" icon={<HelpCircle className="w-4 h-4" />} tone="bg-[#efe6d3] text-[#a08a5c]" />
-        <Kpi
+        <KpiCard index={0} label="Total Sales" value={summary.total_revenue} format={formatMoney} hint="Gross sales in the analysed window" icon={<DollarSign className="w-4 h-4" />} tone="bg-[#f2e9dc] text-[#9c6b3f]" trend={finished.map(w => w.revenue)} trendLabel="Weekly sales, finished weeks" />
+        <KpiCard index={1} label="Transactions" value={summary.total_transactions} format={n => Math.round(n).toLocaleString()} hint="Entries processed" icon={<Activity className="w-4 h-4" />} tone="bg-[#f2e9dc] text-[#7d6864]" trend={finished.map(w => w.transactions)} trendLabel="Weekly transactions, finished weeks" />
+        <KpiCard index={2} label="Average Sale" value={summary.avg_transaction_value} format={formatMoney} hint="Average ticket value" icon={<HelpCircle className="w-4 h-4" />} tone="bg-[#efe6d3] text-[#a08a5c]" trend={finished.filter(w => w.transactions > 0).map(w => w.revenue / w.transactions)} trendLabel="Weekly average sale, finished weeks" />
+        <KpiCard
+          index={3}
           label="Weekly Growth"
-          value={growth !== null && growth !== undefined ? `${growth > 0 ? "+" : ""}${growth.toFixed(1)}%` : "n/a"}
+          value={growth ?? null}
+          format={n => `${n > 0 ? "+" : ""}${n.toFixed(1)}%`}
+          text="n/a"
+          trend={finished.map(w => w.growth_pct).filter((g): g is number => g !== null && g !== undefined)}
+          trendLabel="Weekly growth, finished weeks"
           hint={comparable
             ? `Week of ${(comparable.week ?? "").split("/")[0]} vs the week before${weekInProgress ? " · this week is still in progress" : ""}`
             : weekInProgress ? "Not enough full weeks to compare yet" : "Latest week vs the week before"}
@@ -152,7 +144,7 @@ export default function OverviewPage() {
       {insights?.insights?.length ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {insights.insights.map((insight, idx) => (
-            <div key={idx} className="glass-card p-6 flex flex-col justify-between gap-4">
+            <div key={idx} className="glass-card sage-reveal p-6 flex flex-col justify-between gap-4" style={{ "--i": idx + 4 } as React.CSSProperties}>
               <div className="space-y-1">
                 <h3 className="font-bold text-[#3d3335] text-sm flex items-center gap-2">
                   <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#b9855a]" />
