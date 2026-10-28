@@ -1,3 +1,5 @@
+from datetime import date, timedelta
+
 import pandas as pd
 import numpy as np
 from typing import List, Dict, Any, Tuple
@@ -18,6 +20,29 @@ def clean_val(val: Any) -> Any:
 def clean_record_dict(d: Dict[str, Any]) -> Dict[str, Any]:
     """Recursively clean dict keys and values."""
     return {k: clean_val(v) for k, v in d.items()}
+
+# A week or month counts as complete when the data reaches within this many days of both its edges, so a
+# business that is simply closed on the last day of a period isn't treated as having an unfinished one.
+COMPLETE_TOLERANCE_DAYS = 1
+
+
+def _period_coverage(start: date, end: date, data_start: date, data_through: date) -> Dict[str, Any]:
+    """Whether the uploaded data spans the whole [start, end] period, and how many of its days it covers."""
+    tolerance = timedelta(days=COMPLETE_TOLERANCE_DAYS)
+    covered = (min(end, data_through) - max(start, data_start)).days + 1
+    return {
+        "is_complete": data_start <= start + tolerance and data_through >= end - tolerance,
+        "days_covered": max(covered, 0),
+        "days_in_period": (end - start).days + 1,
+    }
+
+
+def _growth_between_complete(revenue: pd.Series, complete: List[bool]) -> pd.Series:
+    """Period-over-period % change, but only where both periods are complete (partial periods aren't comparable)."""
+    growth = revenue.pct_change() * 100
+    comparable = pd.Series(complete, index=revenue.index) & pd.Series(complete, index=revenue.index).shift(1, fill_value=False)
+    return growth.where(comparable)
+
 
 DRIVER_DAILY_WINDOW = 60  # keep the stored per-day breakdown small
 
@@ -157,17 +182,22 @@ def run_profiling(records: List[SyncedData]) -> Dict[str, Any]:
         transactions=("Amount", "count")
     ).sort_index().reset_index()
 
+    data_start = df["Date"].min().date()
+    data_through = df["Date"].max().date()
+
     if not monthly_grp.empty:
-        # Calculate MoM pct change
-        monthly_grp["growth_pct"] = monthly_grp["revenue"].pct_change() * 100
+        coverage = [_period_coverage(p.start_time.date(), p.end_time.date(), data_start, data_through) for p in monthly_grp["YearMonth"]]
+        # Calculate MoM pct change (only between two complete months)
+        monthly_grp["growth_pct"] = _growth_between_complete(monthly_grp["revenue"], [c["is_complete"] for c in coverage])
         monthly_grp["month"] = monthly_grp["YearMonth"].astype(str)
-        
-        for _, row in monthly_grp.iterrows():
+
+        for (_, row), cov in zip(monthly_grp.iterrows(), coverage):
             monthly_list.append({
                 "month": str(row["month"]),
                 "revenue": round(float(row["revenue"]), 2),
                 "transactions": int(row["transactions"]),
-                "growth_pct": clean_val(row["growth_pct"])
+                "growth_pct": clean_val(row["growth_pct"]),
+                **cov,
             })
 
     # 3b. Daily Metrics & DoD Growth (powers date-specific chat questions, e.g. "why did sales drop on X")
@@ -187,7 +217,8 @@ def run_profiling(records: List[SyncedData]) -> Dict[str, Any]:
                 "date": row["Day"].isoformat(),
                 "revenue": round(float(row["revenue"]), 2),
                 "transactions": int(row["transactions"]),
-                "growth_pct": clean_val(row["growth_pct"])
+                "growth_pct": clean_val(row["growth_pct"]),
+                "is_complete": True,  # a day can't be told apart from a part-day export; only weeks and months are flagged
             })
 
     # 4. Weekly Metrics & WoW Growth
@@ -200,16 +231,18 @@ def run_profiling(records: List[SyncedData]) -> Dict[str, Any]:
     ).sort_index().reset_index()
 
     if not weekly_grp.empty:
-        # Calculate WoW pct change
-        weekly_grp["growth_pct"] = weekly_grp["revenue"].pct_change() * 100
+        coverage = [_period_coverage(p.start_time.date(), p.end_time.date(), data_start, data_through) for p in weekly_grp["YearWeek"]]
+        # Calculate WoW pct change (only between two complete weeks)
+        weekly_grp["growth_pct"] = _growth_between_complete(weekly_grp["revenue"], [c["is_complete"] for c in coverage])
         weekly_grp["week"] = weekly_grp["YearWeek"].astype(str)
-        
-        for _, row in weekly_grp.iterrows():
+
+        for (_, row), cov in zip(weekly_grp.iterrows(), coverage):
             weekly_list.append({
                 "week": str(row["week"]),
                 "revenue": round(float(row["revenue"]), 2),
                 "transactions": int(row["transactions"]),
-                "growth_pct": clean_val(row["growth_pct"])
+                "growth_pct": clean_val(row["growth_pct"]),
+                **cov,
             })
 
     # 5. Category Analysis

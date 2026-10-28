@@ -16,6 +16,8 @@ ROWS = []
 for month, n in COFFEE_PER_MONTH.items():
     ROWS += [{"Date": f"2026-{month:02d}-{d:02d}", "Amount": 100, "Category": "Coffee", "Payment Method": "Card"} for d in range(1, n + 1)]
     ROWS += [{"Date": f"2026-{month:02d}-{d:02d}", "Amount": 50, "Category": "Bakery", "Payment Method": "Cash"} for d in (10, 11)]
+# The file runs through 31 May (a $0 closing entry), so every month above is a finished one.
+ROWS.append({"Date": "2026-05-31", "Amount": 0, "Category": "Bakery", "Payment Method": "Cash"})
 
 
 @pytest.fixture(autouse=True)
@@ -35,7 +37,7 @@ def test_best_and_worst_periods(stats):
     assert r["best"]["period"] == "2026-05" and r["best"]["revenue"] == 700.0
     assert r["worst"]["period"] == "2026-01" and r["worst"]["revenue"] == 300.0
     assert r["average_revenue"] == 500.0 and r["periods_analysed"] == 5
-    assert r["latest"]["vs_average_pct"] == 40.0
+    assert r["latest_complete"]["vs_average_pct"] == 40.0
 
 
 def test_best_and_worst_without_data():
@@ -82,6 +84,7 @@ def test_forecast_needs_enough_history():
 
 def test_forecast_never_goes_negative():
     rows = [{"Date": f"2026-{m:02d}-01", "Amount": a} for m, a in ((1, 300), (2, 150), (3, 10))]
+    rows.append({"Date": "2026-03-31", "Amount": 0})  # closes March so it counts as a finished month
     r = ChatTools(run_profiling(_records(rows))).forecast_next_period("monthly")
     assert r["projected_revenue"] == 0.0
 
@@ -94,7 +97,8 @@ def test_forecast_flags_a_noisy_trend_as_weak():
 
 def test_forecast_counts_quiet_weeks_as_time_passing():
     # Sales in weeks 1, 2, then nothing for a month, then week 7: the gap must not be squashed.
-    rows = [{"Date": d, "Amount": 100} for d in ("2026-01-05", "2026-01-12", "2026-01-19", "2026-02-16")]
+    dates = ("2026-01-05", "2026-01-12", "2026-01-19", "2026-02-16", "2026-02-22")  # last entry closes the final week
+    rows = [{"Date": d, "Amount": 100} for d in dates]
     r = ChatTools(run_profiling(_records(rows))).forecast_next_period("weekly")
     assert r["projected_period"] == "2026-02-23/2026-03-01"
 

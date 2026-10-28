@@ -7,6 +7,7 @@ import {
   TrendingDown, TrendingUp, Trophy
 } from "lucide-react";
 import { useWorkspace } from "../../../components/workspace/WorkspaceProvider";
+import { latestComparableGrowth, periodInProgress } from "../../../lib/periods";
 import InsightChart from "../../../components/InsightChart";
 import { Alert, EmptyState, PageHeader, formatDateTime, formatMoney, primaryButton, timeAgo } from "../../../components/ui";
 
@@ -73,7 +74,9 @@ export default function OverviewPage() {
   const summary = profile?.summary ?? { total_revenue: 0, total_transactions: 0, avg_transaction_value: 0 };
   const anomalies: { transaction_id: string; date: string; amount: number; reason: string; z_score: number }[] = profile?.anomalies ?? [];
   const weekly = profile?.period_metrics?.weekly ?? [];
-  const growth: number | null | undefined = weekly[weekly.length - 1]?.growth_pct;
+  const comparable = latestComparableGrowth(weekly);
+  const growth: number | null | undefined = comparable?.growth_pct;
+  const weekInProgress = periodInProgress(weekly);
   const topCategory = profile?.category_metrics?.top_categories?.[0];
   const warnings: string[] = profile?.data_quality?.warnings ?? [];
   const name = user?.name || user?.email.split("@")[0];
@@ -129,7 +132,9 @@ export default function OverviewPage() {
         <Kpi
           label="Weekly Growth"
           value={growth !== null && growth !== undefined ? `${growth > 0 ? "+" : ""}${growth.toFixed(1)}%` : "n/a"}
-          hint="Latest week vs the week before"
+          hint={comparable
+            ? `Week of ${(comparable.week ?? "").split("/")[0]} vs the week before${weekInProgress ? " · this week is still in progress" : ""}`
+            : weekInProgress ? "Not enough full weeks to compare yet" : "Latest week vs the week before"}
           icon={growth !== null && growth !== undefined && growth < 0 ? <TrendingDown className="w-4 h-4" /> : <TrendingUp className="w-4 h-4" />}
           tone={growth !== null && growth !== undefined && growth < 0 ? "bg-rose-50 text-rose-600" : "bg-emerald-50 text-emerald-600"}
         />

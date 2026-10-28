@@ -255,7 +255,8 @@ class ChatService:
         if r["anomalies_in_period"]:
             a = max(r["anomalies_in_period"], key=lambda x: abs(x["amount"]))
             text += f"Note a flagged anomaly of ${a['amount']:,.2f} on {a['date']} ({a['reason']}). "
-        return text.strip() + " These are contributing factors visible in your data, not proven causes."
+        notes = " ".join(r.get("notes") or [])
+        return (text.strip() + " " + notes).strip() + " These are contributing factors visible in your data, not proven causes."
 
     @classmethod
     def _mock_respond(cls, tools: ChatTools, user_message: str) -> Dict[str, Any]:
@@ -285,45 +286,86 @@ class ChatService:
         return period_type, result
 
     @classmethod
-    def _forecast_text(cls, r: Dict[str, Any]) -> str:
+    def _latest_period_text(cls, periods: List[Dict[str, Any]], key: str) -> str:
+        """Report the latest finished period; mention an unfinished last one separately instead of passing it off as a result."""
+        finished = [p for p in periods if p.get("is_complete", True)]
+        last = periods[-1]
+        if not finished:
+            return f"Your data only covers part of one {key} so far ({last[key]}), with ${last['revenue']:,.2f}."
+        text = f"Your most recent full {key} ({finished[-1][key]}) brought in ${finished[-1]['revenue']:,.2f}."
+        if last is not finished[-1]:
+            days = f" ({last['days_covered']} of {last['days_in_period']} days)" if "days_covered" in last else ""
+            text += f" The current {key} ({last[key]}) is still in progress{days}, with ${last['revenue']:,.2f} so far."
+        return text
+
+    @staticmethod
+    def _in_progress_text(info: Optional[Dict[str, Any]]) -> str:
+        if not info:
+            return ""
+        days = f" ({info['days_covered']} of {info['days_in_period']} days)" if "days_covered" in info else ""
+        return f" {info['period']} is still in progress{days} with ${info['revenue_so_far']:,.2f} so far, so it isn't counted."
+
+    @classmethod
+    def _forecast_text(cls, r: Dict[str, Any], asked: Optional[str] = None) -> str:
         if "error" in r:
             return r["error"]
         unit = {"daily": "day", "weekly": "week", "monthly": "month"}[r["period_type"]]
-        direction = "upward" if r["trend_per_period"] > 0 else "downward" if r["trend_per_period"] < 0 else "flat"
-        return (
+        direction = "an upward" if r["trend_per_period"] > 0 else "a downward" if r["trend_per_period"] < 0 else "a flat"
+        text = ""
+        if asked and asked != r["period_type"]:
+            asked_unit = {"daily": "day", "weekly": "week", "monthly": "month"}[asked]
+            text = f"There aren't enough finished {asked_unit}s to project a trend, so here is the next {unit} instead. "
+        text += (
             f"If the recent trend continues, the next {unit} ({r['projected_period']}) lands around "
             f"${r['projected_revenue']:,.2f}, versus ${r['last_period_revenue']:,.2f} in {r['last_period']}. "
-            f"That's a {direction} trend of ${abs(r['trend_per_period']):,.2f} per {unit} across the last "
-            f"{len(r['based_on_periods'])} {unit}s, with a {r['trend_fit']} fit (R\u00b2 {r['r_squared']}). "
+            f"That's {direction} trend of ${abs(r['trend_per_period']):,.2f} per {unit} across the last "
+            f"{len(r['based_on_periods'])} finished {unit}s, with a {r['trend_fit']} fit (R\u00b2 {r['r_squared']}). "
             "This is a rough projection from your own history, not a guarantee."
         )
+        progress = r.get("in_progress")
+        if progress and progress["period"] == r["projected_period"]:
+            days = f" ({progress['days_covered']} of {progress['days_in_period']} days in)" if "days_covered" in progress else ""
+            text += f" That {unit} is already under way{days} with ${progress['revenue_so_far']:,.2f} so far."
+        else:
+            text += cls._in_progress_text(progress)
+        return text
 
     @classmethod
     def _best_worst_text(cls, r: Dict[str, Any]) -> str:
         if "error" in r:
             return r["error"]
         unit = {"daily": "day", "weekly": "week", "monthly": "month"}[r["period_type"]]
-        latest = r["latest"]
+        latest = r["latest_complete"]
         text = (
             f"Your best {unit} was {r['best']['period']} with ${r['best']['revenue']:,.2f}, and your weakest was "
             f"{r['worst']['period']} with ${r['worst']['revenue']:,.2f}. The average is ${r['average_revenue']:,.2f} "
             f"across {r['periods_analysed']} {unit}s."
         )
         if latest["vs_average_pct"] is not None:
-            text += f" The latest ({latest['period']}) is {latest['vs_average_pct']:+.1f}% versus that average."
-        return text + " The most recent period may not be complete yet."
+            text += f" The latest finished {unit} ({latest['period']}) is {latest['vs_average_pct']:+.1f}% versus that average."
+        return text + cls._in_progress_text(r.get("in_progress"))
 
     @classmethod
     def _driver_trend_text(cls, r: Dict[str, Any]) -> str:
         if "error" in r:
             return r["error"]
+        progress = ""
+        if r.get("in_progress"):
+            progress = f" {r['in_progress']['period']} is still in progress (${r['in_progress']['revenue_so_far']:,.2f} so far) and isn't counted."
+        if r["change"] is None:
+            return f"There aren't two finished {r['period_type']} periods of '{r['name']}' yet, so I can't call a trend." + progress
+        complete = [pt for pt in r["series"] if pt["is_complete"]]
         pct = f" ({r['change_pct']:+.1f}%)" if r["change_pct"] is not None else ""
         direction = "up" if r["change"] > 0 else "down" if r["change"] < 0 else "flat"
-        return (
-            f"'{r['name']}' went from ${r['series'][0]['revenue']:,.2f} in {r['first_period']} to "
-            f"${r['series'][-1]['revenue']:,.2f} in {r['last_period']}: {direction} ${abs(r['change']):,.2f}{pct} "
-            f"over {len(r['series'])} {r['period_type']} periods."
+        text = (
+            f"'{r['name']}' went from ${complete[0]['revenue']:,.2f} in {r['first_period']} to "
+            f"${complete[-1]['revenue']:,.2f} in {r['last_period']}: {direction} ${abs(r['change']):,.2f}{pct} "
+            f"over {len(complete)} finished {r['period_type']} periods."
         )
+        latest = r["latest_vs_previous"]
+        if latest["change_pct"] is not None and len(complete) > 2:
+            text += f" Most recently, {latest['period']} was {latest['change_pct']:+.1f}% versus {latest['compared_to']}."
+        return text + progress
 
     @staticmethod
     def _driver_names(tools: ChatTools) -> List[tuple]:
@@ -363,7 +405,7 @@ class ChatService:
 
         if re.search(r"forecast|predict|project(ed|ion)|next (day|week|month)|where am i (going|heading)|going to (make|earn|bring)|expect", msg):
             period_type, result = cls._first_working(cls._period_from_message(msg, "monthly"), tools.forecast_next_period)
-            return {"content": cls._forecast_text(result), "chart": None,
+            return {"content": cls._forecast_text(result, asked=cls._period_from_message(msg, "monthly")), "chart": None,
                     "query_used": "forecast_next_period", "query_result": result}
 
         if re.search(r"\bwhy\b|\bwhat (caused|happened)|\bexplain\b|\bdrop|\bdecline|\bdecrease|\bincrease|\bspike", msg):
@@ -410,19 +452,13 @@ class ChatService:
 
         if "month" in msg:
             result = tools.get_period_metrics("monthly")
-            content = (
-                f"Your most recent month ({result[-1]['month']}) brought in ${result[-1]['revenue']:,.2f}."
-                if result else "No monthly data is available yet."
-            )
+            content = cls._latest_period_text(result, "month") if result else "No monthly data is available yet."
             return {"content": content, "chart": cls._build_chart("get_period_metrics", result),
                     "query_used": "get_period_metrics", "query_result": result}
 
         if "week" in msg or "trend" in msg or "growth" in msg:
             result = tools.get_period_metrics("weekly")
-            content = (
-                f"Your most recent week ({result[-1]['week']}) brought in ${result[-1]['revenue']:,.2f}."
-                if result else "No weekly data is available yet."
-            )
+            content = cls._latest_period_text(result, "week") if result else "No weekly data is available yet."
             return {"content": content, "chart": cls._build_chart("get_period_metrics", result),
                     "query_used": "get_period_metrics", "query_result": result}
 

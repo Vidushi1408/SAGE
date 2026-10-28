@@ -143,14 +143,22 @@ class AIService:
             f"Your business has generated a total revenue of ${total_revenue:,.2f} across "
             f"{total_tx} transactions. The average purchase size is ${avg_tx:,.2f}."
         )
-        if len(weekly_metrics) > 1:
-            last_week = weekly_metrics[-1]
+        # Talk about the latest finished week; a week the data stops partway through is mentioned separately.
+        finished_weeks = [w for w in weekly_metrics if w.get("is_complete", True)]
+        if finished_weeks:
+            last_week = finished_weeks[-1]
             growth = last_week.get("growth_pct")
             if growth is not None:
                 explanation_trend += (
-                    f" During the most recent week ({last_week['week']}), revenues stood at "
+                    f" During the most recent full week ({last_week['week']}), revenues stood at "
                     f"${last_week['revenue']:,.2f}, representing a {growth:+.1f}% change compared to the previous week."
                 )
+        if weekly_metrics and not weekly_metrics[-1].get("is_complete", True):
+            current = weekly_metrics[-1]
+            explanation_trend += (
+                f" The current week ({current['week']}) is still in progress with ${current['revenue']:,.2f} so far, "
+                "so it isn't compared yet."
+            )
 
         insights.append({
             "title": "Weekly Revenue Trend Analysis",

@@ -142,6 +142,24 @@ class ChatTools:
     PERIOD_KEYS = {"monthly": "month", "weekly": "week", "daily": "date"}
     TOP_DRIVERS = 3
 
+    @staticmethod
+    def _is_complete(period: Dict[str, Any]) -> bool:
+        # Stats computed before completeness was tracked have no flag; treat those periods as complete.
+        return period.get("is_complete", True)
+
+    def _progress_info(self, period_type: str, period: Dict[str, Any]) -> Dict[str, Any]:
+        info = {"period": period[self.PERIOD_KEYS[period_type]], "revenue_so_far": period["revenue"],
+                "transactions_so_far": period["transactions"]}
+        if "days_covered" in period:
+            info["days_covered"], info["days_in_period"] = period["days_covered"], period["days_in_period"]
+        return info
+
+    def _latest_in_progress(self, period_type: str) -> Optional[Dict[str, Any]]:
+        periods = self.stats.get("period_metrics", {}).get(period_type, [])
+        if periods and not self._is_complete(periods[-1]):
+            return self._progress_info(period_type, periods[-1])
+        return None
+
     def _driver_deltas(self, dimension: str, period_type: str, period: str, base: str, total_change: float) -> List[Dict[str, Any]]:
         rows = self.stats.get("drivers", {}).get(dimension, {}).get(period_type, [])
         current = {r["name"]: r for r in rows if r["period"] == period}
@@ -174,7 +192,9 @@ class ChatTools:
         if period is None:
             if len(periods) < 2:
                 return {"error": f"Need at least two {period_type} periods to explain a change."}
-            period = labels[-1]
+            complete = [p.get(key) for p in periods if self._is_complete(p)]
+            # Prefer the latest finished period; an in-progress one would just look like a drop.
+            period = complete[-1] if len(complete) >= 2 else labels[-1]
         if period not in labels:
             return {"error": f"No {period_type} data for {period}. Available: {labels[-10:]}"}
         if compare_to is None:
@@ -199,6 +219,16 @@ class ChatTools:
 
         anomalies = [a for a in self.stats.get("anomalies", []) if self._in_period(a.get("date", ""), period_type, period)]
 
+        notes = []
+        for label, entry in ((period, cur), (compare_to, prev)):
+            if not self._is_complete(entry):
+                notes.append(f"{label} is not a complete {period_type[:-2] if period_type != 'daily' else 'day'} "
+                             f"({entry.get('days_covered', '?')} of {entry.get('days_in_period', '?')} days of data), "
+                             "so this comparison understates it.")
+        in_progress = self._latest_in_progress(period_type)
+        if in_progress and in_progress["period"] not in (period, compare_to):
+            notes.append(f"{in_progress['period']} is still in progress and was left out.")
+
         return {
             "period": period,
             "compared_to": compare_to,
@@ -215,6 +245,7 @@ class ChatTools:
             "top_category_drivers": self._driver_deltas("category", period_type, period, compare_to, change),
             "top_payment_method_drivers": self._driver_deltas("payment_method", period_type, period, compare_to, change),
             "anomalies_in_period": anomalies[:5],
+            "notes": notes,
         }
 
     FORECAST_WINDOW = 6
@@ -227,20 +258,28 @@ class ChatTools:
         periods = self.stats.get("period_metrics", {}).get(period_type, [])
         if not periods:
             return {"error": f"No {period_type} data available."}
-        best = max(periods, key=lambda p: p["revenue"])
-        worst = min(periods, key=lambda p: p["revenue"])
-        average = sum(p["revenue"] for p in periods) / len(periods)
-        latest = periods[-1]
-        return {
+        # Rank finished periods only: a half-finished month would always look like the worst one.
+        ranked = [p for p in periods if self._is_complete(p)]
+        note = None
+        if not ranked:
+            ranked, note = periods, f"No {period_type} period is fully covered by the data, so partial ones are ranked."
+        best = max(ranked, key=lambda p: p["revenue"])
+        worst = min(ranked, key=lambda p: p["revenue"])
+        average = sum(p["revenue"] for p in ranked) / len(ranked)
+        latest = ranked[-1]
+        result = {
             "period_type": period_type,
-            "periods_analysed": len(periods),
+            "periods_analysed": len(ranked),
             "best": {"period": best[key], "revenue": best["revenue"], "transactions": best["transactions"]},
             "worst": {"period": worst[key], "revenue": worst["revenue"], "transactions": worst["transactions"]},
             "average_revenue": round(average, 2),
-            "latest": {"period": latest[key], "revenue": latest["revenue"],
-                       "vs_average_pct": round((latest["revenue"] - average) / average * 100, 1) if average else None},
-            "note": "The most recent period may be only partly complete, which can make it look like the worst.",
+            "latest_complete": {"period": latest[key], "revenue": latest["revenue"],
+                                "vs_average_pct": round((latest["revenue"] - average) / average * 100, 1) if average else None},
+            "in_progress": self._latest_in_progress(period_type),
         }
+        if note:
+            result["note"] = note
+        return result
 
     def get_driver_trend(self, dimension: str, name: str, period_type: str) -> Dict[str, Any]:
         if dimension not in ("category", "payment_method"):
@@ -253,24 +292,41 @@ class ChatTools:
         if match is None:
             hint = f"Available: {names}" if names else f"No {dimension} breakdown exists in this data."
             return {"error": f"No {dimension} called '{name}'. {hint}"}
+
+        key = self.PERIOD_KEYS[period_type]
+        status = {p[key]: p for p in self.stats.get("period_metrics", {}).get(period_type, [])}
         series = sorted(
-            ({"period": r["period"], "revenue": r["revenue"], "transactions": r["transactions"]}
+            ({"period": r["period"], "revenue": r["revenue"], "transactions": r["transactions"],
+              "is_complete": self._is_complete(status.get(r["period"], {}))}
              for r in rows if r["name"] == match),
             key=lambda r: r["period"],
         )
-        first, last = series[0], series[-1]
-        change = round(last["revenue"] - first["revenue"], 2)
-        return {
-            "dimension": dimension,
-            "name": match,
-            "period_type": period_type,
-            "series": series,
-            "first_period": first["period"],
-            "last_period": last["period"],
-            "change": change,
-            "change_pct": round(change / first["revenue"] * 100, 1) if first["revenue"] else None,
-            "note": "Periods where this had no sales are omitted.",
+        complete = [pt for pt in series if pt["is_complete"]]
+        result: Dict[str, Any] = {
+            "dimension": dimension, "name": match, "period_type": period_type, "series": series,
+            "note": "Periods where this had no sales are omitted. Figures below use finished periods only.",
         }
+        in_progress = next((pt for pt in series if not pt["is_complete"] and pt["period"] == (self._latest_in_progress(period_type) or {}).get("period")), None)
+        if in_progress:
+            result["in_progress"] = {"period": in_progress["period"], "revenue_so_far": in_progress["revenue"]}
+        if len(complete) < 2:
+            result.update(change=None, change_pct=None,
+                          note=result["note"] + " Fewer than two finished periods, so no change is reported.")
+            return result
+        first, last, before_last = complete[0], complete[-1], complete[-2]
+        change = round(last["revenue"] - first["revenue"], 2)
+        latest_change = round(last["revenue"] - before_last["revenue"], 2)
+        peak = max(complete, key=lambda pt: pt["revenue"])
+        result.update(
+            first_period=first["period"], last_period=last["period"],
+            change=change, change_pct=round(change / first["revenue"] * 100, 1) if first["revenue"] else None,
+            latest_vs_previous={
+                "period": last["period"], "compared_to": before_last["period"], "change": latest_change,
+                "change_pct": round(latest_change / before_last["revenue"] * 100, 1) if before_last["revenue"] else None,
+            },
+            peak={"period": peak["period"], "revenue": peak["revenue"]},
+        )
+        return result
 
     @staticmethod
     def _next_label(period_type: str, last_label: str) -> Optional[str]:
@@ -303,9 +359,11 @@ class ChatTools:
         key = self.PERIOD_KEYS.get(period_type)
         if not key:
             return {"error": f"Unknown period_type: {period_type}"}
-        periods = self.stats.get("period_metrics", {}).get(period_type, [])
+        all_periods = self.stats.get("period_metrics", {}).get(period_type, [])
+        # Fit on finished periods only; an in-progress one would drag the projection down.
+        periods = [p for p in all_periods if self._is_complete(p)]
         if len(periods) < self.FORECAST_MIN_PERIODS:
-            return {"error": f"Need at least {self.FORECAST_MIN_PERIODS} {period_type} periods to project a trend; only {len(periods)} available."}
+            return {"error": f"Need at least {self.FORECAST_MIN_PERIODS} complete {period_type} periods to project a trend; only {len(periods)} available."}
         window = periods[-self.FORECAST_WINDOW:]
         ys = [p["revenue"] for p in window]
         n = len(ys)
@@ -331,8 +389,8 @@ class ChatTools:
             "based_on_periods": [p[key] for p in window],
             "trend_fit": fit,
             "r_squared": r_squared,
-            "caveat": "A straight-line projection from recent history only; it ignores seasonality, promotions and anything not in the data. "
-                      "The latest period may be incomplete, which pulls the projection down.",
+            "in_progress": self._latest_in_progress(period_type),
+            "caveat": "A straight-line projection from recent finished periods only; it ignores seasonality, promotions and anything not in the data.",
         }
 
     @staticmethod
@@ -354,9 +412,12 @@ class ChatTools:
         if not a or not b:
             return {"error": f"Could not find both periods. Available: {[p.get(key) for p in periods]}"}
 
+        warnings = [f"{label} is incomplete ({p.get('days_covered', '?')} of {p.get('days_in_period', '?')} days)."
+                    for label, p in ((period_a, a), (period_b, b)) if not self._is_complete(p)]
         return {
             period_a: a,
             period_b: b,
+            "warnings": warnings,
             "revenue_change_pct": (
                 round(((a["revenue"] - b["revenue"]) / b["revenue"]) * 100, 2)
                 if b.get("revenue") else None
