@@ -8,6 +8,8 @@ export interface User {
   workspace_owner_id?: string;
   is_active: boolean;
   alert_email_enabled?: boolean;
+  /** True for the read-only visitor in the demo sandbox. */
+  is_demo?: boolean;
   created_at: string;
 }
 
@@ -172,6 +174,14 @@ class ApiClient {
       body: formData.toString()
     });
 
+    this.setToken(res.access_token);
+    return res;
+  }
+
+  /** Enter the read-only demo workspace. The server returns 404 when demo mode is switched off. */
+  public async demoLogin(): Promise<{ access_token: string }> {
+    this.clearToken();
+    const res = await this.request<{ access_token: string }>("/api/v1/auth/demo", { method: "POST" });
     this.setToken(res.access_token);
     return res;
   }

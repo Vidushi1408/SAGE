@@ -4,11 +4,13 @@ import userEvent from "@testing-library/user-event";
 
 vi.mock("next/navigation", () => ({ usePathname: () => "/insights" }));
 vi.mock("./ChatPanel", () => ({ default: () => <div data-testid="chat-panel" /> }));
+const current = { user: { id: "1", email: "demo@sage.ai", name: "Demo", role: "admin", is_active: true, created_at: "" } as Record<string, unknown> };
+
 vi.mock("./workspace/WorkspaceProvider", () => ({
   useWorkspace: () => ({
     canWrite: true, refreshing: false, refreshStep: "", refreshAnalysis: vi.fn(), lastAnalysedAt: null,
     error: "", setError: vi.fn(), toast: "", loading: false, signOut: vi.fn(),
-    user: { id: "1", email: "demo@sage.ai", name: "Demo", role: "admin", is_active: true, created_at: "" },
+    user: current.user,
     profile: { anomalies: [{ transaction_id: "TX_1", date: "2026-07-19", amount: 950, reason: "High value outlier" }] }
   })
 }));
@@ -35,5 +37,18 @@ describe("AppShell", () => {
   it("shows the floating chat on every page except /ask", () => {
     render(<AppShell><p /></AppShell>);
     expect(screen.getByTestId("chat-panel")).toBeInTheDocument();
+  });
+
+  it("tells demo visitors the workspace is read-only and offers sign-up", () => {
+    current.user = { ...current.user, role: "viewer", is_demo: true };
+    render(<AppShell><p /></AppShell>);
+    expect(screen.getByText(/exploring a demo workspace/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /create your own workspace/i })).toHaveAttribute("href", "/register");
+    current.user = { ...current.user, role: "admin", is_demo: false };
+  });
+
+  it("shows no demo banner for real accounts", () => {
+    render(<AppShell><p /></AppShell>);
+    expect(screen.queryByText(/exploring a demo workspace/i)).not.toBeInTheDocument();
   });
 });

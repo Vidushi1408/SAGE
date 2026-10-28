@@ -47,3 +47,6 @@ class FailureRateLimiter:
 # 10 bad passwords per (ip, email) and 50 per ip within 15 minutes
 login_account_limiter = FailureRateLimiter(max_failures=10, window_seconds=900)
 login_ip_limiter = FailureRateLimiter(max_failures=50, window_seconds=900)
+
+# Demo sandbox entries: 30 per ip per hour (each start is recorded, not just failures)
+demo_ip_limiter = FailureRateLimiter(max_failures=30, window_seconds=3600)

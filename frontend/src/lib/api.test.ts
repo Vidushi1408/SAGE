@@ -24,6 +24,17 @@ describe("ApiClient", () => {
     expect(api.isLoggedIn()).toBe(true);
   });
 
+  it("demoLogin posts to the demo endpoint with no credentials and stores the token", async () => {
+    const fetchSpy = mockFetchOnce({ access_token: "guest-token" });
+    global.fetch = fetchSpy;
+    await api.demoLogin();
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toMatch(/\/api\/v1\/auth\/demo$/);
+    expect(init.method).toBe("POST");
+    expect(init.body).toBeUndefined();
+    expect(localStorage.getItem("sage_token")).toBe("guest-token");
+  });
+
   it("attaches the Authorization header once logged in", async () => {
     global.fetch = mockFetchOnce({ access_token: "test-token-123" });
     await api.login("demo@sage.ai", "sage_demo_pass");

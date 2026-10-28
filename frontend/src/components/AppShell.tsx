@@ -147,7 +147,7 @@ function UserMenu() {
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { canWrite, refreshing, refreshStep, refreshAnalysis, lastAnalysedAt, error, setError, toast, loading } = useWorkspace();
+  const { user, canWrite, refreshing, refreshStep, refreshAnalysis, lastAnalysedAt, error, setError, toast, loading } = useWorkspace();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
@@ -244,6 +244,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <div className="flex items-start justify-between gap-3">
               <span>{error}</span>
               <button onClick={() => setError("")} aria-label="Dismiss" className="text-red-500 hover:text-red-700 shrink-0"><X className="w-3.5 h-3.5" /></button>
+            </div>
+          </Alert>
+        )}
+        {user?.is_demo && (
+          <Alert tone="warning">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <span>You&apos;re exploring a demo workspace with sample data. It&apos;s read-only, so you can look around and ask questions but not change anything.</span>
+              <Link href="/register" className="font-bold underline underline-offset-2 whitespace-nowrap">Create your own workspace</Link>
             </div>
           </Alert>
         )}

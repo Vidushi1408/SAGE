@@ -48,6 +48,7 @@ In the **sage-backend** web service settings under **Environment**, configure th
 | `GOOGLE_CLIENT_SECRET`| Google OAuth Client Secret (leave empty for Mock connection) | `GOCSPX-...` |
 | `GOOGLE_REDIRECT_URI` | Production redirect callback URL (update with your Render URL) | `https://sage-backend.onrender.com/api/v1/connectors/google/callback` |
 | `CORS_ORIGINS` | Your Vercel frontend URL(s), comma-separated, no trailing slash. **Required**: without it the browser blocks every API call from the deployed site | `https://sage-app.vercel.app` |
+| `ENABLE_DEMO` | Read-only demo sandbox ("Explore the demo" on the sign-in page). **Off by default in production**; set `true` only if you want a public demo. Visitors can look and chat but can't change anything. Also set `NEXT_PUBLIC_ENABLE_DEMO=false` on the frontend to hide the button when it's off | *(empty = off in production)* |
 | `LLM_PROVIDER` | `ollama`, `anthropic` or `mock`. Empty = Anthropic if a key is set, else mock. If set to `anthropic` with no `ANTHROPIC_API_KEY`, SAGE falls back to mock instead of erroring. Ollama is a local server, so on Render use Anthropic/mock unless you host Ollama yourself | *(empty)* |
 | `OLLAMA_BASE_URL` / `OLLAMA_MODEL` | Where Ollama runs and which model to use (`ollama pull llama3.2:3b`) | `http://localhost:11434` / `llama3.2:3b` |
 | `SYNC_INTERVAL_MINUTES` | Frequency of background spreadsheet checks (in minutes) | `30` |

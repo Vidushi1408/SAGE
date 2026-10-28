@@ -35,6 +35,26 @@ class Settings(BaseSettings):
     OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "llama3.2:3b")
     OLLAMA_TIMEOUT_SECONDS: float = float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "120"))
 
+    # Demo mode: a read-only sandbox visitors can enter without an account. "" = on outside production, off in production.
+    ENABLE_DEMO: str = os.getenv("ENABLE_DEMO", "").strip().lower()
+
+    @property
+    def is_production(self) -> bool:
+        return self.ENVIRONMENT.lower() == "production"
+
+    @property
+    def demo_enabled(self) -> bool:
+        if self.ENABLE_DEMO in ("1", "true", "yes", "on"):
+            return True
+        if self.ENABLE_DEMO in ("0", "false", "no", "off"):
+            return False
+        return not self.is_production
+
+    @property
+    def dev_demo_login_allowed(self) -> bool:
+        """The well-known demo@sage.ai / sage_demo_pass login is a local-development convenience only."""
+        return self.demo_enabled and not self.is_production
+
     @property
     def active_llm(self) -> str:
         has_key = bool(self.ANTHROPIC_API_KEY.strip())

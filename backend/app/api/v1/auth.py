@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.db import get_db
 from app.core.config import settings
 from app.core.security import hash_password, verify_password, create_access_token, normalize_email, password_fingerprint
-from app.core.rate_limit import login_account_limiter, login_ip_limiter
+from app.core.rate_limit import login_account_limiter, login_ip_limiter, demo_ip_limiter
 from app.models.user import User
 from app.schemas.user import (
     UserCreate, UserResponse, Token,
@@ -17,6 +17,7 @@ from app.schemas.user import (
 )
 from app.api.deps import get_current_user
 from app.services.email import EmailService
+from app.services.demo import DEMO_OWNER_EMAIL, DEMO_OWNER_DEV_PASSWORD, ensure_demo_workspace, is_demo_account
 
 router = APIRouter()
 
@@ -64,12 +65,15 @@ def login(
 
     user = db.query(User).filter(func.lower(User.email) == email).first()
 
-    # Auto-seed the demo user for testing ease
-    if not user and email == "demo@sage.ai":
-        hashed_demo_pw = hash_password("sage_demo_pass")
+    # The demo accounts are not password-login accounts outside local development: visitors enter the
+    # sandbox through POST /auth/demo, and a published password must never open an admin account.
+    if is_demo_account(email) and not settings.dev_demo_login_allowed:
+        user = None
+    elif not user and email == DEMO_OWNER_EMAIL:
+        # Local development convenience: auto-create the demo user so tests and docs can sign in immediately
         user = User(
-            email="demo@sage.ai",
-            hashed_password=hashed_demo_pw
+            email=DEMO_OWNER_EMAIL,
+            hashed_password=hash_password(DEMO_OWNER_DEV_PASSWORD)
         )
         db.add(user)
         db.commit()
@@ -94,6 +98,27 @@ def login(
 
     access_token = create_access_token(subject=user.id, pw_fingerprint=password_fingerprint(user.hashed_password))
     return {"access_token": access_token, "token_type": "bearer"}
+
+@router.post("/demo", response_model=Token)
+def demo_login(request: Request, db: Session = Depends(get_db)):
+    """Enter the read-only demo workspace without an account. 404s unless demo mode is enabled."""
+    if not settings.demo_enabled:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Demo mode isn't available on this server.")
+
+    client_ip = request.client.host if request.client else "unknown"
+    wait = demo_ip_limiter.retry_after(client_ip)
+    if wait:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many demo sessions from this address. Try again in {max(1, wait // 60)} minute(s).",
+            headers={"Retry-After": str(wait)},
+        )
+    demo_ip_limiter.record_failure(client_ip)  # counts every start, so the window caps total demo sessions per address
+
+    guest = ensure_demo_workspace(db)
+    access_token = create_access_token(subject=guest.id, pw_fingerprint=password_fingerprint(guest.hashed_password))
+    return {"access_token": access_token, "token_type": "bearer"}
+
 
 @router.get("/me", response_model=UserResponse)
 def get_me(current_user: User = Depends(get_current_user)):

@@ -27,6 +27,7 @@ class UserResponse(UserBase):
     workspace_owner_id: Optional[UUID] = None
     is_active: bool
     alert_email_enabled: bool
+    is_demo: bool = False
     created_at: datetime
     updated_at: datetime
 

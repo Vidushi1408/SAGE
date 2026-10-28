@@ -5,7 +5,7 @@ import userEvent from "@testing-library/user-event";
 const push = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 vi.mock("../../lib/api", () => ({
-  default: { login: vi.fn(), listSheets: vi.fn(), getLatestProfile: vi.fn() },
+  default: { login: vi.fn(), demoLogin: vi.fn(), listSheets: vi.fn(), getLatestProfile: vi.fn() },
   errorMessage: (e: unknown) => (e instanceof Error ? e.message : ""),
 }));
 
@@ -47,5 +47,23 @@ describe("Login", () => {
     await signIn();
     expect(await screen.findByText("Incorrect email or password")).toBeInTheDocument();
     expect(push).not.toHaveBeenCalled();
+  });
+
+  it("enters the demo through the dedicated endpoint, never with a hard-coded password", async () => {
+    mocked.demoLogin.mockResolvedValue(undefined as never);
+    mocked.listSheets.mockResolvedValue([{ id: "s" }] as never);
+    mocked.getLatestProfile.mockResolvedValue({} as never);
+    render(<Login />);
+    await userEvent.setup().click(screen.getByRole("button", { name: /explore the demo/i }));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/dashboard"));
+    expect(mocked.demoLogin).toHaveBeenCalledTimes(1);
+    expect(mocked.login).not.toHaveBeenCalled();
+  });
+
+  it("explains when the server has the demo switched off", async () => {
+    mocked.demoLogin.mockRejectedValue(new Error("Demo mode isn't available on this server."));
+    render(<Login />);
+    await userEvent.setup().click(screen.getByRole("button", { name: /explore the demo/i }));
+    expect(await screen.findByText("Demo mode isn't available on this server.")).toBeInTheDocument();
   });
 });

@@ -25,6 +25,10 @@ class User(Base):
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
+    @property
+    def is_demo(self) -> bool:
+        return (self.email or "").lower() == "guest@demo.sage.ai"
+
     # Relationships
     workspace_owner = relationship("User", remote_side=[id], backref="team_members")
     

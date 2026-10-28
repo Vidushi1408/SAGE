@@ -6,6 +6,9 @@ import Link from "next/link";
 import api, { errorMessage } from "../../lib/api";
 import { Sparkles, RefreshCw, AlertCircle, ArrowLeft } from "lucide-react";
 
+// Set NEXT_PUBLIC_ENABLE_DEMO=false to hide the demo entry point (it must also be off on the server).
+const DEMO_ENABLED = process.env.NEXT_PUBLIC_ENABLE_DEMO !== "false";
+
 export default function Login() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -40,7 +43,7 @@ export default function Login() {
     setError("");
     setLoading(true);
     try {
-      await api.login("demo@sage.ai", "sage_demo_pass");
+      await api.demoLogin();
       await checkRedirection();
     } catch (err) {
       setError(errorMessage(err) || "Demo login failed");
@@ -113,6 +116,7 @@ export default function Login() {
             </button>
           </form>
 
+          {DEMO_ENABLED && (<>
           <div className="relative mb-6">
             <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-[#e6ddc9]"></div></div>
             <div className="relative flex justify-center text-[10px] uppercase"><span className="bg-white px-3 text-[#8a7d78] font-semibold tracking-wider">Or demo instantly</span></div>
@@ -124,8 +128,9 @@ export default function Login() {
             className="w-full py-3 rounded-lg bg-[#efe8d8] border border-[#e6ddc9] hover:bg-[#f6f1e7] text-[#3d3335] font-semibold transition-all flex justify-center items-center gap-2 hover:border-[#9c8480]/40 text-xs shadow-sm"
           >
             <Sparkles className="w-3.5 h-3.5 text-[#9c6b3f] animate-pulse" />
-            <span>Launch Demo Guest Mode</span>
+            <span>Explore the demo (read-only)</span>
           </button>
+          </>)}
         </div>
 
         <div className="text-center text-xs text-[#8a7d78]">
