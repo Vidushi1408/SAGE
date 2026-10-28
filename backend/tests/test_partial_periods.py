@@ -196,3 +196,11 @@ def test_profile_forecast_is_absent_when_history_is_too_short():
     forecast = run_profiling(_records(rows))["forecast"]
     assert forecast["monthly"] is None  # two months aren't enough to project a trend
     assert set(forecast) == {"weekly", "monthly"}
+
+
+def test_insight_chart_leaves_out_the_unfinished_week(stats):
+    weekly = stats["period_metrics"]["weekly"]
+    assert weekly[-1]["is_complete"] is False
+    chart = AIService.generate_insights(stats)["insights"][0]["chart_data"]
+    assert weekly[-1]["week"] not in [point["name"] for point in chart]
+    assert chart[-1]["name"] == [w for w in weekly if w["is_complete"]][-1]["week"]

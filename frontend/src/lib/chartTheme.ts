@@ -53,4 +53,10 @@ export function compactNumber(value: number): string {
 }
 const trim = (n: number) => String(Math.round(n * 10) / 10);
 
-export const compactMoney = (value: number) => `${value < 0 ? "-" : ""}$${compactNumber(Math.abs(value))}`;
+/** $1.2K above a thousand; below that exact amounts, so $90.30 never shows as $90.3. */
+export function compactMoney(value: number): string {
+  const abs = Math.abs(value);
+  const sign = value < 0 ? "-" : "";
+  if (abs >= 1_000) return `${sign}$${compactNumber(abs)}`;
+  return `${sign}$${Number.isInteger(abs) ? abs : abs.toFixed(2)}`;
+}

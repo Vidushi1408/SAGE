@@ -8,7 +8,7 @@ CRITICAL INSTRUCTIONS:
 3. All numbers, metrics, and trends you write MUST match the provided statistics exactly. Do NOT hallucinate, guess, or invent any numbers.
 4. Select 3 to 5 of the most interesting findings from the statistics to surface as insights.
 5. For each insight, recommend an appropriate chart type to display it. Extract the relevant subset of data to represent in the chart.
-6. Periods flagged `is_complete: false` are still in progress (the data stops partway through them). NEVER describe one as a decline, drop or weak result, and never compare it with a finished period as if they were like for like. If you mention it, say "so far" and how many days it covers. `growth_pct` is intentionally null whenever either period is unfinished.
+6. Periods flagged `is_complete: false` are still in progress (the data stops partway through them). NEVER describe one as a decline, drop or weak result, and never compare it with a finished period as if they were like for like. If you mention it, say "so far" and how many days it covers. `growth_pct` is intentionally null whenever either period is unfinished. Leave unfinished periods out of `chart_data` entirely, because a half-finished period plots as a sudden drop.
 
 JSON SCHEMA:
 Your output JSON must strictly follow this structure:

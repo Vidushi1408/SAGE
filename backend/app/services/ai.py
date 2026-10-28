@@ -135,8 +135,9 @@ class AIService:
         insights = []
 
         # 2. Insight A: Revenue Summary & Weekly Trend
+        # Chart finished weeks only: an unfinished one would draw as a sudden collapse.
         weekly_chart = []
-        for w in weekly_metrics[-6:]:  # Last 6 weeks
+        for w in [w for w in weekly_metrics if w.get("is_complete", True)][-6:]:  # Last 6 finished weeks
             weekly_chart.append({"name": w["week"], "value": w["revenue"]})
 
         explanation_trend = (

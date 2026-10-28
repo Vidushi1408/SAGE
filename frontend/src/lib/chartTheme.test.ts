@@ -50,4 +50,12 @@ describe("compact formatters", () => {
     expect(compactMoney(4200)).toBe("$4.2K");
     expect(compactMoney(-1500)).toBe("-$1.5K");
   });
+
+  it("keeps exact cents below a thousand", () => {
+    expect(compactMoney(90.3)).toBe("$90.30");
+    expect(compactMoney(468.83)).toBe("$468.83");
+    expect(compactMoney(50)).toBe("$50");
+    expect(compactMoney(-5)).toBe("-$5");
+    expect(compactMoney(0)).toBe("$0");
+  });
 });

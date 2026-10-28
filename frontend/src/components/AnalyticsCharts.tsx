@@ -305,7 +305,7 @@ export default function AnalyticsCharts({ profile }: { profile: ProfileShape | n
         </ChartPanel>
 
         <ChartPanel
-          index={5} height="h-60" icon={<PieIcon className="w-4 h-4" />} title="Revenue share by category"
+          index={5} height="sm:h-60" icon={<PieIcon className="w-4 h-4" />} title="Revenue share by category"
           subtitle={allCategories.length > 6 ? "Top five, with the rest grouped as Other" : `${allCategories.length} categories`}
           table={{ columns: [{ key: "category", label: "Category" }, { key: "revenue", label: "Revenue", align: "right", format: money }, { key: "volume", label: "Orders", align: "right" }, { key: "share_pct", label: "Share", align: "right", format: v => `${Number(v).toFixed(1)}%` }], rows: allCategories as unknown as Record<string, unknown>[] }}
         >
@@ -335,7 +335,7 @@ export default function AnalyticsCharts({ profile }: { profile: ProfileShape | n
 
         {paymentBreakdown.length > 0 && (
           <ChartPanel
-            index={7} height="h-60" icon={<CreditCard className="w-4 h-4" />} title="Payment methods" subtitle="Share of revenue by how customers paid"
+            index={7} height="sm:h-60" icon={<CreditCard className="w-4 h-4" />} title="Payment methods" subtitle="Share of revenue by how customers paid"
             table={{ columns: [{ key: "method", label: "Method" }, { key: "revenue", label: "Revenue", align: "right", format: money }, { key: "volume", label: "Orders", align: "right" }, { key: "share_pct", label: "Share", align: "right", format: v => `${Number(v).toFixed(1)}%` }], rows: paymentBreakdown as unknown as Record<string, unknown>[] }}
           >
             <DonutChart slices={paymentBreakdown.map(p => ({ name: p.method, value: p.revenue }))} />

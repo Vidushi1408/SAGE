@@ -22,6 +22,14 @@ export function shortLabel(label: string, granularity: Granularity): string {
   return MONTHS[Number(m) - 1] ? `${MONTHS[Number(m) - 1]} ${Number(d)}` : label;
 }
 
+/** Shorten a day, week or month label wherever it appears (insight charts get theirs from the backend); anything else is left alone. */
+export function autoShortLabel(label: string): string {
+  if (/^\d{4}-\d{2}-\d{2}\/\d{4}-\d{2}-\d{2}$/.test(label)) return shortLabel(label, "weekly");
+  if (/^\d{4}-\d{2}-\d{2}$/.test(label)) return shortLabel(label, "daily");
+  if (/^\d{4}-\d{2}$/.test(label)) return shortLabel(label, "monthly");
+  return label;
+}
+
 /** "Sep 28 – Oct 4" for a week, the plain short label otherwise. Used in tooltips and tables. */
 export function longLabel(label: string, granularity: Granularity): string {
   if (granularity === "weekly" && label.includes("/")) {

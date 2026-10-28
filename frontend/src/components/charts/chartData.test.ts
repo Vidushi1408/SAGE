@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildCalendar, buildTrendSeries, inPeriod, levelFor, levelThresholds, longLabel, roundedBarPath, shortLabel, weekdayName } from "./chartData";
+import { autoShortLabel, buildCalendar, buildTrendSeries, inPeriod, levelFor, levelThresholds, longLabel, roundedBarPath, shortLabel, weekdayName } from "./chartData";
 import type { PeriodPoint } from "../../lib/periods";
 
 const month = (m: string, revenue: number, extra: Partial<PeriodPoint> = {}): PeriodPoint =>
@@ -24,6 +24,16 @@ describe("labels", () => {
     expect(inPeriod("2026-11-01", "2026-10", "monthly")).toBe(false);
     expect(inPeriod("2026-10-04", "2026-09-28/2026-10-04", "weekly")).toBe(true);
     expect(inPeriod("2026-10-05", "2026-09-28/2026-10-04", "weekly")).toBe(false);
+  });
+});
+
+describe("autoShortLabel", () => {
+  it("shortens ISO days, weeks and months and leaves other labels alone", () => {
+    expect(autoShortLabel("2026-10-05/2026-10-11")).toBe("Oct 5");
+    expect(autoShortLabel("2026-10-05")).toBe("Oct 5");
+    expect(autoShortLabel("2026-10")).toBe("Oct '26");
+    expect(autoShortLabel("Sandwiches")).toBe("Sandwiches");
+    expect(autoShortLabel("2026-W20")).toBe("2026-W20");
   });
 });
 
